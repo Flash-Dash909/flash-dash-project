@@ -16,4 +16,9 @@ backend/.env
 
 #RODAR
 pip install --upgrade google-generativeai
+flutter pub add fl_chart
+
+#RODAR PROJETO
+#BACKEND = uvicorn main:app --reload
+#FRONTEND = flutter run -d chrome
 
