@@ -13,7 +13,6 @@ def save (dados_json, insight_texto):
             "ia_response": insight_texto
         }
         
-        # Fazemos o INSERT na tabela 'analises'
         resposta = supabase_db.table("analises").insert(novo_registro).execute()
         
         print("--- Salvo no Supabase com sucesso!")
