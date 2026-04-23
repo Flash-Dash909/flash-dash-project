@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'features/dashboard/screens/dashboard_screen.dart';
-import 'features/projetos/screens/projetos_screen.dart';
+import 'features/upload/screens/upload_screen.dart'; // Importação atualizada!
 
 void main() {
   runApp(const FlashDashApp());
@@ -12,14 +11,13 @@ class FlashDashApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flash Dash',
-      debugShowCheckedModeBanner: false, 
+      title: 'Flash-Dash',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueAccent),
         useMaterial3: true,
       ),
-
-      home: const ProjetosScreen(),
+      home: const UploadScreen(),
     );
   }
 }

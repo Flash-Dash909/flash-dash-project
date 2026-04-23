@@ -45,20 +45,23 @@ def limparPlanilha(conteudo_arquivo, nome_arquivo):
                 chart_data.append({
                     "label": str(row[dimensao]),
                     "value": float(row[metrica]),
-                    "color": cores[i % len(cores)]
+                    "color": cores[i % len(cores)] # type: ignore
                 })
 
-        # 4. Retornando no formato JSON exato que você estabeleceu
+          # 4. Retornando no formato JSON exato que o Flutter precisa agora
         return {
             "status": "success",
             "summary": {
                 "total_rows": len(df),
-                "cleaned_columns": list(df.columns)
+                "cleaned_columns": list(df.columns),
+                "dimensoes": colunas_categoricas,  # Aqui vão só os textos (Eixo X)
+                "metricas": colunas_numericas      # Aqui vão só os números (Eixo Y)
             },
-            "chart_data": chart_data
+            "chart_data": chart_data,
+            # Exportamos os dados completos (preenchendo vazios para não dar erro de JSON)
+            "dados_completos": df.fillna("").to_dict(orient='records') 
         }
 
     except Exception as e:
         return {"status": "error", "message": str(e)}
-
 
