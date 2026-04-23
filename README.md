@@ -1,63 +1,42 @@
-# ⚡📊 Flash-Dash
+# 🚀 Flash-Dash: Inteligência de Negócios Automatizada
 
-O **Flash-Dash** é um projeto universitário focado na democratização do Business Intelligence (BI). O sistema automatiza processos de dados para oferecer dashboards ágeis e de baixo custo, ideal para **Pequenas e Médias Empresas (PMEs)** e **Analistas de Dados**.
+O **Flash-Dash** é uma plataforma de Business Intelligence (BI) focada em pequenas e médias empresas, projetada para transformar planilhas brutas em dashboards interativos e insights estratégicos em segundos. Utilizando o poder do **Python (FastAPI)** para o processamento de dados e **Flutter** para uma experiência de usuário fluida, o sistema integra o **Google Gemini AI** para oferecer uma análise consultiva em tempo real.
 
----
+## ✨ Funcionalidades Principais
 
-## 🛠️ Stack Tecnológica
+* **⚡ Processamento Inteligente:** Motor de limpeza automatizado que trata dados nulos, formata tipos e resolve inconsistências em arquivos Excel e CSV via Pandas.
+* **🎨 Dashboard Canvas (Drag & Drop):** Uma área de trabalho livre onde o usuário pode adicionar múltiplos gráficos, movê-los, redimensioná-los e personalizar o visual (cores e títulos).
+* **🤖 Analista IA Interativo:** Um chat integrado ao dashboard que recebe o contexto de todos os gráficos ativos. Você pode perguntar sobre tendências, causas de quedas nas vendas ou previsões baseadas nos dados reais.
+* **📊 Visualização Avançada:** Suporte para gráficos de Barras, Colunas, Pizza e Rosca, com renderização reativa e cálculos de métricas em tempo real no frontend.
+* **💡 Insights Automáticos:** Geração automática de um resumo executivo logo após o upload da fonte de dados.
 
-* **Front-End:** [Flutter](https://flutter.dev/) (UI/UX Responsivo)
-* **Back-End:** [Python](https://www.python.org/) com [FastAPI](https://fastapi.tiangolo.com/) (Motor de BI)
-* **Banco de Dados:** [Supabase](https://supabase.com/) (Backend-as-a-Service)
+## 🛠️ Tecnologias Utilizadas
 
----
+### **Backend (Motor de Dados)**
+* **Python 3.12+**: Linguagem base para manipulação de dados.
+* **FastAPI**: Framework de alta performance para a API.
+* **Pandas**: Biblioteca líder para limpeza e modelagem de dados.
+* **Google Generative AI (Gemini SDK)**: Cérebro por trás dos insights e do chat inteligente.
 
-## 📂 Estrutura do Repositório (Monorepo)
+### **Frontend (Interface)**
+* **Flutter (Dart)**: Framework para interface multiplataforma (Web/Desktop).
+* **FL Chart**: Biblioteca para renderização de gráficos complexos.
+* **HTTP & File Picker**: Gestão de requisições e upload de arquivos.
 
-* `core/backend`: Motor de processamento em Python e API REST.
-* `core/frontend`: Interface mobile/web em Flutter.
-* `docs/`: Requisitos, cronogramas e documentação acadêmica.
+## 📂 Estrutura do Projeto
 
----
-
-## 🚀 Como Executar o Projeto
-
-### Pré-requisitos
-* Python 3.12+
-* Flutter SDK
-* Git
-
-### 🐍 Configurando o Back-End (Motor de BI)
-1. Acesse a pasta: `cd backend`
-2. Crie o ambiente virtual: `python -m venv .venv`
-3. Ative o ambiente: `.\.venv\Scripts\activate`
-4. Instale as dependências: `pip install -r requirements.txt`
-5. Inicie o servidor: `uvicorn src.main:app --reload`
-   * Acompanhe a documentação automática em: `http://127.0.0.1:8000/docs`
-
-### 💙 Configurando o Front-End (Flutter)
-1. Acesse a pasta: `cd frontend`
-2. Obtenha os pacotes: `flutter pub get`
-3. Execute o app: `flutter run`
-
----
-
-## 🔌 Documentação da API (Endpoints)
-
-O motor utiliza o padrão **OpenAPI (Swagger)**.
-* `GET /`: Status geral do sistema.
-* `GET /api/v1/health`: Verificação de saúde para QA.
-
----
-
-## 👥 Equipe e Stakeholders
-
-| Nome | Função | Responsabilidades |
-| :--- | :--- | :--- |
-| **Rogério Bruno** | Gerente de Projeto / Líder Técnico | Arquitetura, Motor de BI e Integração. |
-| **Amanda Evellin** | Desenvolvedora Front-End | UI/UX e Componentes Visuais. |
-| **Pedro Enrique** | QA - Analista de Testes | Qualidade e Testes Automatizados. |
-| **Ronnison Reges** | Professor Orientador | Acompanhamento Metodológico e Avaliação. |
-
----
-*Status: 🟢 Estrutura Base e API Inicial Concluídas.*
+```text
+flash-dash-repository/
+├── backend/                # API FastAPI e Lógica de Dados
+│   ├── src/
+│   │   ├── main.py         # Endpoints e rotas da API
+│   │   ├── tratamento.py   # Motor de limpeza Pandas
+│   │   └── ia_service.py   # Integração com Gemini AI
+│   └── .env                # Chaves de API (não versionado)
+└── frontend/               # Aplicativo Flutter
+    ├── lib/
+    │   ├── features/
+    │   │   ├── dashboard/  # Canvas e Chat IA
+    │   │   ├── upload/     # Gestão de fontes de dados
+    │   │   └── resultado/  # Configuração de métricas
+    │   └── main.dart       # Ponto de entrada
