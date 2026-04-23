@@ -1,42 +1,79 @@
-# 🚀 Flash-Dash: Inteligência de Negócios Automatizada
+# ⚡📊 Flash-Dash
 
-O **Flash-Dash** é uma plataforma de Business Intelligence (BI) focada em pequenas e médias empresas, projetada para transformar planilhas brutas em dashboards interativos e insights estratégicos em segundos. Utilizando o poder do **Python (FastAPI)** para o processamento de dados e **Flutter** para uma experiência de usuário fluida, o sistema integra o **Google Gemini AI** para oferecer uma análise consultiva em tempo real.
+O **Flash-Dash** é um projeto universitário focado na democratização do Business Intelligence (BI). O sistema automatiza processos de dados para oferecer dashboards ágeis e de baixo custo, ideal para **Pequenas e Médias Empresas (PMEs)** e **Analistas de Dados**. 
 
-## ✨ Funcionalidades Principais
+Com a recente integração de Inteligência Artificial Generativa, a plataforma não apenas exibe gráficos, mas atua como um consultor interativo de dados.
 
-* **⚡ Processamento Inteligente:** Motor de limpeza automatizado que trata dados nulos, formata tipos e resolve inconsistências em arquivos Excel e CSV via Pandas.
-* **🎨 Dashboard Canvas (Drag & Drop):** Uma área de trabalho livre onde o usuário pode adicionar múltiplos gráficos, movê-los, redimensioná-los e personalizar o visual (cores e títulos).
-* **🤖 Analista IA Interativo:** Um chat integrado ao dashboard que recebe o contexto de todos os gráficos ativos. Você pode perguntar sobre tendências, causas de quedas nas vendas ou previsões baseadas nos dados reais.
-* **📊 Visualização Avançada:** Suporte para gráficos de Barras, Colunas, Pizza e Rosca, com renderização reativa e cálculos de métricas em tempo real no frontend.
-* **💡 Insights Automáticos:** Geração automática de um resumo executivo logo após o upload da fonte de dados.
+---
 
-## 🛠️ Tecnologias Utilizadas
+## ✨ Funcionalidades Principais (Novidades)
 
-### **Backend (Motor de Dados)**
-* **Python 3.12+**: Linguagem base para manipulação de dados.
-* **FastAPI**: Framework de alta performance para a API.
-* **Pandas**: Biblioteca líder para limpeza e modelagem de dados.
-* **Google Generative AI (Gemini SDK)**: Cérebro por trás dos insights e do chat inteligente.
+* **🧹 Processamento Inteligente:** Motor de limpeza automatizado (Pandas) que trata dados brutos de planilhas (Excel/CSV) em segundos.
+* **🎨 Dashboard Canvas (Drag & Drop):** Área de trabalho livre no Flutter onde o usuário pode adicionar, mover, redimensionar e personalizar múltiplos gráficos (Barras, Colunas, Pizza e Rosca).
+* **🤖 Analista IA Interativo:** Chat integrado ao dashboard alimentado pelo **Google Gemini**. A IA lê o contexto dos gráficos visíveis na tela e responde a perguntas analíticas de negócios em tempo real.
 
-### **Frontend (Interface)**
-* **Flutter (Dart)**: Framework para interface multiplataforma (Web/Desktop).
-* **FL Chart**: Biblioteca para renderização de gráficos complexos.
-* **HTTP & File Picker**: Gestão de requisições e upload de arquivos.
+---
 
-## 📂 Estrutura do Projeto
+## 🛠️ Stack Tecnológica
 
-```text
-flash-dash-repository/
-├── backend/                # API FastAPI e Lógica de Dados
-│   ├── src/
-│   │   ├── main.py         # Endpoints e rotas da API
-│   │   ├── tratamento.py   # Motor de limpeza Pandas
-│   │   └── ia_service.py   # Integração com Gemini AI
-│   └── .env                # Chaves de API (não versionado)
-└── frontend/               # Aplicativo Flutter
-    ├── lib/
-    │   ├── features/
-    │   │   ├── dashboard/  # Canvas e Chat IA
-    │   │   ├── upload/     # Gestão de fontes de dados
-    │   │   └── resultado/  # Configuração de métricas
-    │   └── main.dart       # Ponto de entrada
+* **Front-End:** [Flutter](https://flutter.dev/) com FL Chart (UI/UX Responsivo e Dashboards Interativos)
+* **Back-End:** [Python](https://www.python.org/) com [FastAPI](https://fastapi.tiangolo.com/) e Pandas (Motor de BI)
+* **Inteligência Artificial:** Google Generative AI (Gemini SDK)
+* **Banco de Dados:** [Supabase](https://supabase.com/) (Backend-as-a-Service)
+
+---
+
+## 📂 Estrutura do Repositório (Monorepo)
+
+* `core/backend/`: Motor de processamento em Python, IA e API REST.
+* `core/frontend/`: Interface mobile/web/desktop em Flutter.
+* `docs/`: Requisitos, cronogramas e documentação acadêmica.
+
+---
+
+## 🚀 Como Executar o Projeto
+
+### Pré-requisitos
+* Python 3.12+
+* Flutter SDK
+* Git
+
+### 🐍 Configurando o Back-End (Motor de BI e IA)
+1. Acesse a pasta: `cd core/backend`
+2. Crie o ambiente virtual: `python -m venv .venv`
+3. Ative o ambiente: 
+   * Windows: `.\.venv\Scripts\activate`
+   * Mac/Linux: `source .venv/bin/activate`
+4. Instale as dependências: `pip install -r requirements.txt` *(certifique-se de ter fastapi, uvicorn, pandas, google-genai, python-dotenv)*
+5. Configure as variáveis de ambiente: Crie um arquivo `.env` na raiz do backend e adicione sua chave de IA: `GEMINI_API_KEY=sua_chave_aqui`
+6. Inicie o servidor: `uvicorn src.main:app --reload`
+   * Acompanhe a documentação automática em: `http://127.0.0.1:8000/docs`
+
+### 💙 Configurando o Front-End (Flutter)
+1. Acesse a pasta: `cd core/frontend`
+2. Obtenha os pacotes: `flutter pub get`
+3. Execute o app (Web ou Desktop recomendado para testes de UI): `flutter run -d chrome`
+
+---
+
+## 🔌 Documentação da API (Endpoints Principais)
+
+O motor utiliza o padrão **OpenAPI (Swagger)**.
+* `GET /`: Status geral do sistema.
+* `GET /api/v1/health`: Verificação de saúde para QA.
+* `POST /analisar-planilha`: Recebe o arquivo (CSV/Excel), executa a limpeza dos dados com Pandas e retorna as colunas mapeadas e agregações.
+* `POST /chat-ia`: Recebe a pergunta do usuário e o contexto atual do dashboard (JSON), retornando a análise do Gemini AI.
+
+---
+
+## 👥 Equipe e Stakeholders
+
+| Nome | Função | Responsabilidades |
+| :--- | :--- | :--- |
+| **Rogério Bruno** | Gerente de Projeto / Líder Técnico | Arquitetura, Motor de BI, Integração de IA e Gerenciamento. |
+| **Amanda Evellin** | Desenvolvedora Fullstack | UI/UX e Componentes Visuais do Dashboard. |
+| **Pedro Enrique** | Desenvolvedor Fullstack | Qualidade, Tratamento de Dados e Testes Automatizados. |
+| **Ronnison Reges** | Professor Orientador | Acompanhamento Metodológico e Avaliação do TCC. |
+
+---
+*Status: 🟡 Fase de Desenvolvimento: Processamento Pandas, UI do Dashboard e Analista IA Integrados.*
