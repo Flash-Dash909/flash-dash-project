@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'metricas_screen.dart';
+import '../../processamento/screens/etl_history_screen.dart'; // Importa a tela da Timeline
 
 class SelecaoGraficoScreen extends StatelessWidget {
   final Map<String, dynamic> data;
@@ -47,11 +48,37 @@ class SelecaoGraficoScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Agora a tela começa direto na pergunta e nos botões!
             const Text(
               "Qual visualização deseja criar?", 
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87)
             ),
+            const SizedBox(height: 12),
+            
+            // --- BOTÃO DA LINHA DO TEMPO ETL AQUI ---
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () {
+                  // Pega os logs e o sumário
+                  List<dynamic> logs = data['dados_planilha']['etl_logs'] ?? [];
+                  Map<String, dynamic> summary = data['dados_planilha']['summary'] ?? {}; // <-- Pega o sumário
+                  
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      // <-- Passa o sumário junto
+                      builder: (context) => EtlHistoryScreen(logsEtl: logs, summary: summary), 
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.account_tree, color: Colors.blueGrey),
+                label: const Text(
+                  "Ver Pipeline de Transformação (ETL)", 
+                  style: TextStyle(color: Colors.blueGrey, decoration: TextDecoration.underline)
+                ),
+              ),
+            ),
+
             const SizedBox(height: 24),
             
             // Grid de Botões Modernos

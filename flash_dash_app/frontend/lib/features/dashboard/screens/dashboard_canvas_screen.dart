@@ -113,10 +113,17 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
       _isChatLoading = true;
     });
 
+    // CORREÇÃO: Filtramos os dados para enviar apenas texto e números para a IA.
+    // Isso evita o erro de conversão do objeto "Color" para JSON.
     List<Map<String, dynamic>> contextoDashboard = DashboardManager.graficosAtivos.map((g) {
+      var dadosLimposParaIA = g.dados.map((d) => {
+        "label": d['label'],
+        "value": d['value']
+      }).toList();
+
       return {
         "titulo_grafico": g.titulo,
-        "dados": g.dados
+        "dados": dadosLimposParaIA
       };
     }).toList();
 
@@ -138,13 +145,15 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
           _isChatLoading = false;
         });
       } else {
-        throw Exception("Erro no servidor");
+        throw Exception("Erro no servidor FastAPI: Código ${response.statusCode}");
       }
     } catch (e) {
       setModalState(() {
         _mensagensChat.add({'remetente': 'ia', 'texto': '⚠️ Erro de conexão com a IA.'});
         _isChatLoading = false;
       });
+      // Imprime o erro exato no terminal do Flutter para facilitar futuras depurações
+      print("❌ ERRO NO ENVIO DO CHAT: $e"); 
     }
   }
 
