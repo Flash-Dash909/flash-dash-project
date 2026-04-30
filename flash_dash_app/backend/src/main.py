@@ -30,11 +30,11 @@ app.add_middleware(
 )
 
 @app.post("/analisar-planilha")
-async def analisar_rota(arquivo: UploadFile = File(...)):
+async def analisar_rota(file: UploadFile = File(...)):
     
-    conteudo = await arquivo.read()
+    conteudo = await file.read()
     
-    dados_limpos = limparPlanilha(conteudo, arquivo.filename)
+    dados_limpos = limparPlanilha(conteudo, file.filename)
     
     if dados_limpos["status"] == "error":
         return dados_limpos

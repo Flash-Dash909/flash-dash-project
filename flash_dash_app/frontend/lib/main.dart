@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'features/upload/screens/upload_screen.dart';
+import 'features/home/screens/home_screen.dart';
 
 void main() {
   runApp(const FlashDashApp());
@@ -82,7 +83,7 @@ class FlashDashApp extends StatelessWidget {
         ),
       ),
       
-      home: const UploadScreen(), 
+      home: const HomeScreen(), 
     );
   }
 }
