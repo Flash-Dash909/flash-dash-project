@@ -107,7 +107,7 @@ def limparPlanilha(conteudo_arquivo, nome_arquivo):
             "etl_logs": logs_etl, # <--- ENVIANDO OS LOGS PARA O FRONTEND
             "chart_data": chart_data,
             # Exportamos os dados completos (preenchendo vazios para não dar erro de JSON)
-            "dados_completos": df.fillna("").to_dict(orient='records') 
+            "dados_brutos": df.fillna("").to_dict(orient='records') 
         }
 
     except Exception as e:

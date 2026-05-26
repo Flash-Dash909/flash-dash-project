@@ -1,29 +1,67 @@
 import 'package:flutter/material.dart';
 
 class ChartConfig {
-  final String id;
-  final String tipo;
-  final String dimensao;
-  final String metrica;
-  final List<Map<String, dynamic>> dados;
+  String id;
+  String tipo;
+  String titulo;
+  String dimensao;
+  String metrica;
+  List<Map<String, dynamic>> dados;
   Offset posicao;
   Size tamanho;
-  String titulo;
+  
+  // --- NOVAS CONFIGURAÇÕES GERAIS (Estilo Power BI) ---
   Color corFundo;
+  double fontSizeTitulo;
+  String alinhamentoTitulo; // 'left', 'center', 'right'
+  Color corTextoTitulo;
+  double raioBorda;
+  bool mostrarSombra;
+  bool mostrarEixos; // Para esconder Eixo X e Y (deixar mais clean)
+  bool mostrarLegenda;
+  String posicaoLegenda; 
+  bool mostrarValores;
+  bool mostrarRotulos;
+
+  // Configurações Específicas
+  Map<String, dynamic> configExtra;
 
   ChartConfig({
     required this.id,
     required this.tipo,
+    required this.titulo,
     required this.dimensao,
     required this.metrica,
     required this.dados,
-    this.posicao = const Offset(50, 50),
-    this.tamanho = const Size(350, 300),
-    String? titulo,
+    required this.posicao,
+    this.tamanho = const Size(350, 280),
     this.corFundo = Colors.white,
-  }) : titulo = titulo ?? "$tipo: $dimensao vs $metrica";
+    this.fontSizeTitulo = 14.0,
+    this.alinhamentoTitulo = 'left',
+    this.corTextoTitulo = const Color(0xFF0F172A), // Slate escuro
+    this.raioBorda = 12.0,
+    this.mostrarSombra = true,
+    this.mostrarEixos = true,
+    this.mostrarLegenda = true,
+    this.posicaoLegenda = 'bottom',
+    this.mostrarValores = true,
+    this.mostrarRotulos = true,
+    Map<String, dynamic>? configExtra, 
+  }) : configExtra = configExtra ?? {} {
+    if (this.configExtra.isEmpty) {
+      if (tipo.contains('Pizza') || tipo.contains('Rosca')) {
+        this.configExtra = {
+          'raioFuro': tipo.contains('Rosca') ? 0.6 : 0.0,
+          'mostrarPorcentagem': false,
+          'espessuraFatia': 1.0,
+        };
+      }
+    }
+  }
 }
 
 class DashboardManager {
-  static List<ChartConfig> graficosAtivos = [];
+  static List<ChartConfig> graficosAtivos = []; 
+  static List<Map<String, dynamic>> dashboardsSalvos = [];
+  static List<Map<String, String>> fontesSalvas = [];
 }
