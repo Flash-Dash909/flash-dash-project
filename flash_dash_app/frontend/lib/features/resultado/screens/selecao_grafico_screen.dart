@@ -20,37 +20,37 @@ class SelecaoGraficoScreen extends StatelessWidget {
 
     final tiposGraficos = [
       {
-        "nome": "Gráfico de Barras",
+        "nome": "Grafico de Barras",
         "icone": Icons.bar_chart_rounded,
         "cor": Colors.amber.shade700,
       },
       {
-        "nome": "Gráfico de Colunas",
+        "nome": "Grafico de Colunas",
         "icone": Icons.leaderboard_rounded,
         "cor": Colors.cyan.shade600,
       },
       {
-        "nome": "Gráfico de Pizza",
+        "nome": "Grafico de Pizza",
         "icone": Icons.pie_chart_rounded,
         "cor": Colors.pinkAccent.shade400,
       },
       {
-        "nome": "Gráfico de Rosca",
+        "nome": "Grafico de Rosca",
         "icone": Icons.donut_large_rounded,
         "cor": Colors.green.shade600,
       },
       {
-        "nome": "Gráfico de Linha",
+        "nome": "Grafico de Linha",
         "icone": Icons.show_chart_rounded,
         "cor": Colors.blue.shade600,
       },
       {
-        "nome": "Gráfico de Área",
+        "nome": "Grafico de Area",
         "icone": Icons.area_chart_rounded,
         "cor": Colors.purple.shade500,
       },
       {
-        "nome": "Dispersão",
+        "nome": "Dispersao",
         "icone": Icons.bubble_chart_rounded,
         "cor": Colors.red.shade500,
       },
@@ -59,10 +59,35 @@ class SelecaoGraficoScreen extends StatelessWidget {
         "icone": Icons.track_changes_rounded,
         "cor": Colors.teal.shade500,
       },
+      {
+        "nome": "Tabela",
+        "icone": Icons.table_rows_rounded,
+        "cor": Colors.indigo.shade600,
+      },
+      {
+        "nome": "Segmentacao",
+        "icone": Icons.filter_alt_rounded,
+        "cor": Colors.blueGrey.shade600,
+      },
+      {
+        "nome": "Cartao KPI",
+        "icone": Icons.scoreboard_rounded,
+        "cor": Colors.lime.shade700,
+      },
+      {
+        "nome": "Gauge",
+        "icone": Icons.speed_rounded,
+        "cor": Colors.deepOrange.shade600,
+      },
+      {
+        "nome": "Treemap",
+        "icone": Icons.grid_view_rounded,
+        "cor": Colors.green.shade800,
+      },
     ];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Biblioteca de Gráficos')),
+      appBar: AppBar(title: const Text('Biblioteca de Graficos')),
       backgroundColor: const Color(0xFFF8FAFC),
       body: SingleChildScrollView(
         padding: EdgeInsets.all(paddingGlobal),
@@ -77,7 +102,7 @@ class SelecaoGraficoScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        "Qual visualização deseja criar?",
+                        "Qual visualizacao deseja criar?",
                         style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
@@ -99,7 +124,7 @@ class SelecaoGraficoScreen extends StatelessWidget {
               )
             else ...[
               const Text(
-                "Qual visualização deseja criar?",
+                "Qual visualizacao deseja criar?",
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,

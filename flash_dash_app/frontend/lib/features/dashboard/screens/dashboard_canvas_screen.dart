@@ -17,10 +17,11 @@ class DashboardCanvasScreen extends StatefulWidget {
 class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
   final List<Map<String, String>> _mensagensChat = [];
   final TextEditingController _chatController = TextEditingController();
+  final Map<String, Set<String>> _filtrosSegmentacao = {};
   bool _isChatLoading = false;
 
   // ==========================================
-  // FUNÃ‡ÃƒO MAGNÃ‰TICA (SNAP TO GRID)
+  // Snap magnetico da grade.
   // ==========================================
   double _snap(double value) {
     const double gridSize = 20.0;
@@ -353,7 +354,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                           child: TextField(
                             controller: _chatController,
                             decoration: InputDecoration(
-                              hintText: "Pergunte sobre os grÃ¡ficos...",
+                              hintText: "Pergunte sobre os graficos...",
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(20),
                               ),
@@ -433,7 +434,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
       setModalState(() {
         _mensagensChat.add({
           'remetente': 'ia',
-          'texto': 'âš ï¸ Erro de conexÃ£o com a IA.',
+          'texto': 'Erro de conexao com a IA.',
         });
         _isChatLoading = false;
       });
@@ -457,7 +458,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          isDesktop ? 'Ãrea de Trabalho' : 'Dashboard',
+          isDesktop ? 'Area de Trabalho' : 'Dashboard',
           style: const TextStyle(fontWeight: FontWeight.w600),
         ),
         backgroundColor: Colors.white,
@@ -515,7 +516,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
           constrained:
               false, // Libera o tamanho interno para ser maior que a tela
           child: SizedBox(
-            width: 10000, // EspaÃ§o "ilimitado" de 10k x 10k
+            width: 10000, // Espaco amplo de 10k x 10k.
             height: 10000,
             child: Stack(
               clipBehavior: Clip.none,
@@ -533,10 +534,8 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFF2563EB),
         elevation: 4,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ), // Mais orgÃ¢nico
-        tooltip: "Adicionar GrÃ¡fico",
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        tooltip: "Adicionar Grafico",
         child: const Icon(Icons.add, color: Colors.white),
         onPressed: () {
           final dadosFonte = DashboardManager.dadosFonteAtual;
@@ -557,25 +556,159 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
   }
 
   // ==========================================
-  // MENU DE EDIÃ‡ÃƒO (BOTTOM SHEET MODERNO)
+  // Menu de edicao.
   // ==========================================
   void _abrirConfiguracoesBottomSheet(ChartConfig config) {
     final tituloController = TextEditingController(text: config.titulo);
+    final subtituloController = TextEditingController(
+      text: config.configExtra['subtitleText']?.toString() ?? '',
+    );
+    final descricaoController = TextEditingController(
+      text: config.configExtra['descriptionText']?.toString() ?? '',
+    );
     var tempMostrarLegenda = config.mostrarLegenda;
     var tempMostrarValores = config.mostrarValores;
     var tempMostrarRotulos = config.mostrarRotulos;
     var tempMostrarEixos = config.mostrarEixos;
+    var tempMostrarTitulo = config.configExtra['showTitle'] as bool? ?? true;
+    var tempTituloNegrito = config.configExtra['titleBold'] as bool? ?? true;
+    var tempTituloItalico = config.configExtra['titleItalic'] as bool? ?? false;
+    var tempTituloSublinhado =
+        config.configExtra['titleUnderline'] as bool? ?? false;
+    var tempMostrarSubtitulo =
+        config.configExtra['showSubtitle'] as bool? ?? false;
+    var tempSubtituloSize = ((config.configExtra['subtitleSize'] ?? 12) as num)
+        .toDouble();
+    var tempSubtituloColor = _corConfig(
+      config.configExtra['subtitleColor'],
+      const Color(0xFF64748B),
+    );
     var tempCorFundo = config.corFundo;
+    var tempBgOpacity =
+        ((config.configExtra['backgroundOpacity'] ?? 1.0) as num).toDouble();
     var tempCorTexto = config.corTextoTitulo;
     var tempFontSize = config.fontSizeTitulo;
     var tempAlinhamento = config.alinhamentoTitulo;
     var tempPosicaoLegenda = config.posicaoLegenda;
+    var tempContentPadding =
+        ((config.configExtra['contentPadding'] ?? 8) as num).toDouble();
+    var tempPlotPadding = ((config.configExtra['plotPadding'] ?? 6) as num)
+        .toDouble();
+    var tempBorderWidth = ((config.configExtra['borderWidth'] ?? 1) as num)
+        .toDouble();
+    var tempBorderVisible =
+        config.configExtra['borderVisible'] as bool? ?? true;
+    var tempBorderColor = _corConfig(
+      config.configExtra['borderColor'],
+      const Color(0xFFE2E8F0),
+    );
+    var tempShadowOpacity =
+        ((config.configExtra['shadowOpacity'] ?? 0.12) as num).toDouble();
+    var tempShadowBlur = ((config.configExtra['shadowBlur'] ?? 10) as num)
+        .toDouble();
+    var tempMinWidth = ((config.configExtra['minWidth'] ?? 200) as num)
+        .toDouble();
+    var tempMinHeight = ((config.configExtra['minHeight'] ?? 200) as num)
+        .toDouble();
+    var tempAnimationEntrada =
+        config.configExtra['animationIn']?.toString() ?? 'instantanea';
+    var tempAnimationUpdate =
+        config.configExtra['animationUpdate']?.toString() ?? 'suave';
+    var tempTooltipAtivo =
+        config.configExtra['tooltipEnabled'] as bool? ?? true;
+    var tempInteracaoFiltrar =
+        config.configExtra['interactionFilter'] as bool? ?? true;
+    var tempInteracaoDestacar =
+        config.configExtra['interactionHighlight'] as bool? ?? true;
+    var tempDrillthrough =
+        config.configExtra['interactionDrillthrough'] as bool? ?? false;
+    var tempNavegacao =
+        config.configExtra['interactionNavigation'] as bool? ?? false;
+    var tempExportPng = config.configExtra['exportPng'] as bool? ?? true;
+    var tempExportPdf = config.configExtra['exportPdf'] as bool? ?? false;
+    var tempExportCsv = config.configExtra['exportCsv'] as bool? ?? true;
+    var tempExportExcel = config.configExtra['exportExcel'] as bool? ?? false;
+    var tempThemePreset =
+        config.configExtra['themePreset']?.toString() ?? 'manual';
     var tempRaioFuro = (config.configExtra['raioFuro'] ?? 0.0).toDouble();
     var tempMostrarPorcentagem =
         config.configExtra['mostrarPorcentagem'] ?? false;
     var tempMostrarPontos = config.configExtra['mostrarPontos'] ?? true;
     var tempEspessuraLinha = (config.configExtra['espessuraLinha'] ?? 3.0)
         .toDouble();
+    var tempGaugeMin = (config.configExtra['gaugeMin'] ?? 0.0).toDouble();
+    var tempGaugeMax = (config.configExtra['gaugeMax'] ?? 100.0).toDouble();
+    var tempGaugeMeta = (config.configExtra['gaugeMeta'] ?? 80.0).toDouble();
+    var tempKpiPrefixo = (config.configExtra['prefixo'] ?? '').toString();
+    var tempKpiSufixo = (config.configExtra['sufixo'] ?? '').toString();
+    var tempKpiDecimais = ((config.configExtra['decimais'] ?? 0) as num)
+        .round();
+    var tempKpiFontSize = (config.configExtra['kpiFontSize'] ?? 44.0)
+        .toDouble();
+    var tempCorPrincipal = _corConfig(
+      config.configExtra['corPrincipal'],
+      const Color(0xFF2563EB),
+    );
+    var tempHeaderTabela = _corConfig(
+      config.configExtra['headerColor'],
+      const Color(0xFF1D4ED8),
+    );
+    var tempTotalTabela = _corConfig(
+      config.configExtra['totalColor'],
+      const Color(0xFFFDE047),
+    );
+    var tempRowColorA = _corConfig(
+      config.configExtra['rowColorA'],
+      Colors.white,
+    );
+    var tempRowColorB = _corConfig(
+      config.configExtra['rowColorB'],
+      const Color(0xFFF1F5F9),
+    );
+    var tempGridColor = _corConfig(
+      config.configExtra['gridColor'],
+      const Color(0xFFE2E8F0),
+    );
+    var tempRowHeight = ((config.configExtra['rowHeight'] ?? 34) as num)
+        .toDouble();
+    var tempChipRadius = (config.configExtra['chipRadius'] ?? 8.0).toDouble();
+    var tempSegmentacaoMultipla =
+        config.configExtra['segmentacaoMultipla'] as bool? ?? true;
+    var tempSlicerStyle =
+        config.configExtra['slicerStyle']?.toString() ?? 'botoes';
+    var tempSlicerSearch = config.configExtra['slicerSearch'] as bool? ?? false;
+    var tempGaugeRanges =
+        config.configExtra['gaugeMostrarFaixas'] as bool? ?? false;
+    var tempTreemapSpacing =
+        ((config.configExtra['treemapSpacing'] ?? 0) as num).toDouble();
+    var tempBarGap = ((config.configExtra['barGap'] ?? 0.04) as num).toDouble();
+    var tempBarOpacity = ((config.configExtra['barOpacity'] ?? 1.0) as num)
+        .toDouble();
+    var tempBarBorderWidth =
+        ((config.configExtra['barBorderWidth'] ?? 0) as num).toDouble();
+    var tempBarColorMode =
+        config.configExtra['barColorMode']?.toString() ?? 'categoria';
+    var tempLineColor = _corConfig(
+      config.configExtra['lineColor'],
+      const Color(0xFF2563EB),
+    );
+    var tempMarkerSize = ((config.configExtra['markerSize'] ?? 4) as num)
+        .toDouble();
+    var tempSliceOpacity = ((config.configExtra['sliceOpacity'] ?? 1.0) as num)
+        .toDouble();
+    var tempKpiShowMeta = config.configExtra['kpiShowMeta'] as bool? ?? false;
+    var tempKpiMeta = ((config.configExtra['kpiMeta'] ?? 0) as num).toDouble();
+    var tempKpiShowTrend = config.configExtra['kpiShowTrend'] as bool? ?? false;
+    var tempKpiPrevious = ((config.configExtra['kpiPrevious'] ?? 0) as num)
+        .toDouble();
+    final usaLegenda = _tipoUsaLegenda(config.tipo);
+    final tipoLower = config.tipo.toLowerCase();
+    final usaEixos =
+        tipoLower.contains('barra') ||
+        tipoLower.contains('coluna') ||
+        tipoLower.contains('linha') ||
+        tipoLower.contains('area') ||
+        tipoLower.contains('dispers');
 
     showModalBottomSheet(
       context: context,
@@ -622,11 +755,61 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          const Text(
+                            "Dados",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                          Text("Dimensao: ${config.dimensao}"),
+                          Text("Metrica: ${config.metrica}"),
+                          const Divider(height: 32),
+                          const Text(
+                            "Aparencia",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                          SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text("Exibir titulo"),
+                            value: tempMostrarTitulo,
+                            onChanged: (v) =>
+                                setModalState(() => tempMostrarTitulo = v),
+                          ),
                           TextField(
                             controller: tituloController,
                             decoration: const InputDecoration(
                               labelText: "Titulo do grafico",
                             ),
+                          ),
+                          Wrap(
+                            spacing: 8,
+                            children: [
+                              FilterChip(
+                                label: const Text("Negrito"),
+                                selected: tempTituloNegrito,
+                                onSelected: (v) =>
+                                    setModalState(() => tempTituloNegrito = v),
+                              ),
+                              FilterChip(
+                                label: const Text("Italico"),
+                                selected: tempTituloItalico,
+                                onSelected: (v) =>
+                                    setModalState(() => tempTituloItalico = v),
+                              ),
+                              FilterChip(
+                                label: const Text("Sublinhado"),
+                                selected: tempTituloSublinhado,
+                                onSelected: (v) => setModalState(
+                                  () => tempTituloSublinhado = v,
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 16),
                           Text("Tamanho do titulo: ${tempFontSize.round()}"),
@@ -690,9 +873,58 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                                     )
                                     .toList(),
                           ),
+                          SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text("Exibir subtitulo"),
+                            value: tempMostrarSubtitulo,
+                            onChanged: (v) =>
+                                setModalState(() => tempMostrarSubtitulo = v),
+                          ),
+                          TextField(
+                            controller: subtituloController,
+                            decoration: const InputDecoration(
+                              labelText: "Texto do subtitulo",
+                            ),
+                          ),
+                          Text(
+                            "Tamanho do subtitulo: ${tempSubtituloSize.toStringAsFixed(0)}",
+                          ),
+                          Slider(
+                            value: tempSubtituloSize,
+                            min: 9,
+                            max: 22,
+                            onChanged: (v) =>
+                                setModalState(() => tempSubtituloSize = v),
+                          ),
+                          const Text("Cor do subtitulo"),
+                          Wrap(
+                            spacing: 12,
+                            children:
+                                [
+                                      const Color(0xFF64748B),
+                                      const Color(0xFF2563EB),
+                                      const Color(0xFF0F172A),
+                                      const Color(0xFFEF4444),
+                                    ]
+                                    .map(
+                                      (cor) => _botaoCor(
+                                        tempSubtituloColor,
+                                        cor,
+                                        setModalState,
+                                        (c) => tempSubtituloColor = c,
+                                      ),
+                                    )
+                                    .toList(),
+                          ),
+                          TextField(
+                            controller: descricaoController,
+                            decoration: const InputDecoration(
+                              labelText: "Descricao / tooltip",
+                            ),
+                          ),
                           const Divider(height: 32),
                           const Text(
-                            "Cartao",
+                            "Container",
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               color: Colors.blueGrey,
@@ -721,15 +953,187 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                                     )
                                     .toList(),
                           ),
-                          const Divider(height: 32),
+                          Text(
+                            "Transparencia do fundo: ${(1 - tempBgOpacity).toStringAsFixed(2)}",
+                          ),
+                          Slider(
+                            value: tempBgOpacity,
+                            min: 0,
+                            max: 1,
+                            onChanged: (v) =>
+                                setModalState(() => tempBgOpacity = v),
+                          ),
+                          Text(
+                            "Largura: ${config.tamanho.width.toStringAsFixed(0)}",
+                          ),
+                          Slider(
+                            value: config.tamanho.width,
+                            min: tempMinWidth,
+                            max: 1200,
+                            onChanged: (v) => setModalState(
+                              () => config.tamanho = Size(
+                                v,
+                                config.tamanho.height,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            "Altura: ${config.tamanho.height.toStringAsFixed(0)}",
+                          ),
+                          Slider(
+                            value: config.tamanho.height,
+                            min: tempMinHeight,
+                            max: 900,
+                            onChanged: (v) => setModalState(
+                              () => config.tamanho = Size(
+                                config.tamanho.width,
+                                v,
+                              ),
+                            ),
+                          ),
+                          Text("X: ${config.posicao.dx.toStringAsFixed(0)}"),
+                          Slider(
+                            value: config.posicao.dx.clamp(0, 10000),
+                            min: 0,
+                            max: 10000,
+                            onChanged: (v) => setModalState(
+                              () =>
+                                  config.posicao = Offset(v, config.posicao.dy),
+                            ),
+                          ),
+                          Text("Y: ${config.posicao.dy.toStringAsFixed(0)}"),
+                          Slider(
+                            value: config.posicao.dy.clamp(0, 10000),
+                            min: 0,
+                            max: 10000,
+                            onChanged: (v) => setModalState(
+                              () =>
+                                  config.posicao = Offset(config.posicao.dx, v),
+                            ),
+                          ),
+                          Wrap(
+                            spacing: 8,
+                            children: [
+                              OutlinedButton.icon(
+                                onPressed: () => setModalState(() {
+                                  config.posicao = Offset(
+                                    MediaQuery.of(context).size.width / 2 -
+                                        config.tamanho.width / 2,
+                                    config.posicao.dy,
+                                  );
+                                }),
+                                icon: const Icon(Icons.align_horizontal_center),
+                                label: const Text("Centralizar H"),
+                              ),
+                              OutlinedButton.icon(
+                                onPressed: () => setModalState(() {
+                                  config.posicao = Offset(
+                                    config.posicao.dx,
+                                    MediaQuery.of(context).size.height / 2 -
+                                        config.tamanho.height / 2,
+                                  );
+                                }),
+                                icon: const Icon(Icons.align_vertical_center),
+                                label: const Text("Centralizar V"),
+                              ),
+                            ],
+                          ),
                           SwitchListTile(
                             contentPadding: EdgeInsets.zero,
-                            title: const Text("Mostrar legenda"),
-                            value: tempMostrarLegenda,
+                            title: const Text("Exibir borda"),
+                            value: tempBorderVisible,
                             onChanged: (v) =>
-                                setModalState(() => tempMostrarLegenda = v),
+                                setModalState(() => tempBorderVisible = v),
                           ),
-                          if (tempMostrarLegenda)
+                          const Text("Cor da borda"),
+                          Wrap(
+                            spacing: 12,
+                            children:
+                                [
+                                      const Color(0xFFE2E8F0),
+                                      const Color(0xFF2563EB),
+                                      const Color(0xFF0F172A),
+                                      const Color(0xFFEF4444),
+                                    ]
+                                    .map(
+                                      (cor) => _botaoCor(
+                                        tempBorderColor,
+                                        cor,
+                                        setModalState,
+                                        (c) => tempBorderColor = c,
+                                      ),
+                                    )
+                                    .toList(),
+                          ),
+                          Text(
+                            "Espacamento interno: ${tempContentPadding.toStringAsFixed(0)}",
+                          ),
+                          Slider(
+                            value: tempContentPadding,
+                            min: 0,
+                            max: 32,
+                            onChanged: (v) =>
+                                setModalState(() => tempContentPadding = v),
+                          ),
+                          Text(
+                            "Margem interna do grafico: ${tempPlotPadding.toStringAsFixed(0)}",
+                          ),
+                          Slider(
+                            value: tempPlotPadding,
+                            min: 0,
+                            max: 28,
+                            onChanged: (v) =>
+                                setModalState(() => tempPlotPadding = v),
+                          ),
+                          Text(
+                            "Borda do cartao: ${tempBorderWidth.toStringAsFixed(0)}",
+                          ),
+                          Slider(
+                            value: tempBorderWidth,
+                            min: 0,
+                            max: 8,
+                            divisions: 8,
+                            onChanged: (v) =>
+                                setModalState(() => tempBorderWidth = v),
+                          ),
+                          Text(
+                            "Opacidade da sombra: ${tempShadowOpacity.toStringAsFixed(2)}",
+                          ),
+                          Slider(
+                            value: tempShadowOpacity,
+                            min: 0,
+                            max: 1,
+                            onChanged: (v) =>
+                                setModalState(() => tempShadowOpacity = v),
+                          ),
+                          Text(
+                            "Desfoque da sombra: ${tempShadowBlur.toStringAsFixed(0)}",
+                          ),
+                          Slider(
+                            value: tempShadowBlur,
+                            min: 0,
+                            max: 40,
+                            onChanged: (v) =>
+                                setModalState(() => tempShadowBlur = v),
+                          ),
+                          const Divider(height: 32),
+                          const Text(
+                            "Legenda, rotulos e eixos",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                          if (usaLegenda)
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text("Mostrar legenda"),
+                              value: tempMostrarLegenda,
+                              onChanged: (v) =>
+                                  setModalState(() => tempMostrarLegenda = v),
+                            ),
+                          if (usaLegenda && tempMostrarLegenda)
                             Wrap(
                               spacing: 8,
                               children: ['top', 'bottom', 'left', 'right']
@@ -744,13 +1148,14 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                                   )
                                   .toList(),
                             ),
-                          SwitchListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text("Mostrar valores"),
-                            value: tempMostrarValores,
-                            onChanged: (v) =>
-                                setModalState(() => tempMostrarValores = v),
-                          ),
+                          if (!tipoLower.contains('segment'))
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text("Mostrar valores"),
+                              value: tempMostrarValores,
+                              onChanged: (v) =>
+                                  setModalState(() => tempMostrarValores = v),
+                            ),
                           SwitchListTile(
                             contentPadding: EdgeInsets.zero,
                             title: const Text("Mostrar rotulos"),
@@ -758,13 +1163,14 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                             onChanged: (v) =>
                                 setModalState(() => tempMostrarRotulos = v),
                           ),
-                          SwitchListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text("Mostrar eixos e grade"),
-                            value: tempMostrarEixos,
-                            onChanged: (v) =>
-                                setModalState(() => tempMostrarEixos = v),
-                          ),
+                          if (usaEixos)
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text("Mostrar eixos e grade"),
+                              value: tempMostrarEixos,
+                              onChanged: (v) =>
+                                  setModalState(() => tempMostrarEixos = v),
+                            ),
                           if (config.tipo.contains('Linha') ||
                               config.tipo.contains('Area') ||
                               config.tipo.contains('Área')) ...[
@@ -792,6 +1198,36 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                               max: 8,
                               onChanged: (v) =>
                                   setModalState(() => tempEspessuraLinha = v),
+                            ),
+                            const Text("Cor da linha"),
+                            Wrap(
+                              spacing: 12,
+                              children:
+                                  [
+                                        const Color(0xFF2563EB),
+                                        const Color(0xFF10B981),
+                                        const Color(0xFFEF4444),
+                                        const Color(0xFF8B5CF6),
+                                      ]
+                                      .map(
+                                        (cor) => _botaoCor(
+                                          tempLineColor,
+                                          cor,
+                                          setModalState,
+                                          (c) => tempLineColor = c,
+                                        ),
+                                      )
+                                      .toList(),
+                            ),
+                            Text(
+                              "Tamanho dos marcadores: ${tempMarkerSize.toStringAsFixed(0)}",
+                            ),
+                            Slider(
+                              value: tempMarkerSize,
+                              min: 2,
+                              max: 12,
+                              onChanged: (v) =>
+                                  setModalState(() => tempMarkerSize = v),
                             ),
                           ],
                           if (config.tipo.contains('Pizza') ||
@@ -822,7 +1258,539 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                               onChanged: (v) =>
                                   setModalState(() => tempRaioFuro = v),
                             ),
+                            Text(
+                              "Transparencia das fatias: ${(1 - tempSliceOpacity).toStringAsFixed(2)}",
+                            ),
+                            Slider(
+                              value: tempSliceOpacity,
+                              min: 0.1,
+                              max: 1,
+                              onChanged: (v) =>
+                                  setModalState(() => tempSliceOpacity = v),
+                            ),
                           ],
+                          if (tipoLower.contains('barra') ||
+                              tipoLower.contains('coluna')) ...[
+                            const Divider(height: 32),
+                            const Text(
+                              "Barras e colunas",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blueGrey,
+                              ),
+                            ),
+                            DropdownButtonFormField<String>(
+                              value: tempBarColorMode,
+                              decoration: const InputDecoration(
+                                labelText: "Cores",
+                              ),
+                              items: const [
+                                DropdownMenuItem(
+                                  value: 'categoria',
+                                  child: Text("Por categoria"),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'unica',
+                                  child: Text("Cor unica"),
+                                ),
+                              ],
+                              onChanged: (v) => setModalState(
+                                () => tempBarColorMode = v ?? 'categoria',
+                              ),
+                            ),
+                            Text(
+                              "Transparencia: ${(1 - tempBarOpacity).toStringAsFixed(2)}",
+                            ),
+                            Slider(
+                              value: tempBarOpacity,
+                              min: 0.1,
+                              max: 1,
+                              onChanged: (v) =>
+                                  setModalState(() => tempBarOpacity = v),
+                            ),
+                            Text(
+                              "Espacamento: ${tempBarGap.toStringAsFixed(2)}",
+                            ),
+                            Slider(
+                              value: tempBarGap,
+                              min: 0,
+                              max: 0.18,
+                              onChanged: (v) =>
+                                  setModalState(() => tempBarGap = v),
+                            ),
+                            Text(
+                              "Borda da barra: ${tempBarBorderWidth.toStringAsFixed(0)}",
+                            ),
+                            Slider(
+                              value: tempBarBorderWidth,
+                              min: 0,
+                              max: 6,
+                              onChanged: (v) =>
+                                  setModalState(() => tempBarBorderWidth = v),
+                            ),
+                          ],
+                          if (config.tipo.contains('Gauge')) ...[
+                            const Divider(height: 32),
+                            const Text(
+                              "Gauge",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blueGrey,
+                              ),
+                            ),
+                            Text(
+                              "Valor minimo: ${tempGaugeMin.toStringAsFixed(0)}",
+                            ),
+                            Slider(
+                              value: tempGaugeMin,
+                              min: 0,
+                              max: 100000,
+                              onChanged: (v) =>
+                                  setModalState(() => tempGaugeMin = v),
+                            ),
+                            Text(
+                              "Valor maximo: ${tempGaugeMax.toStringAsFixed(0)}",
+                            ),
+                            Slider(
+                              value: tempGaugeMax,
+                              min: 1,
+                              max: 1000000,
+                              onChanged: (v) =>
+                                  setModalState(() => tempGaugeMax = v),
+                            ),
+                            Text("Meta: ${tempGaugeMeta.toStringAsFixed(0)}"),
+                            Slider(
+                              value: tempGaugeMeta,
+                              min: 0,
+                              max: 1000000,
+                              onChanged: (v) =>
+                                  setModalState(() => tempGaugeMeta = v),
+                            ),
+                            const Text(
+                              "Cor principal",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blueGrey,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 12,
+                              children:
+                                  [
+                                        const Color(0xFF2563EB),
+                                        const Color(0xFF10B981),
+                                        const Color(0xFFF59E0B),
+                                        const Color(0xFFEF4444),
+                                      ]
+                                      .map(
+                                        (cor) => _botaoCor(
+                                          tempCorPrincipal,
+                                          cor,
+                                          setModalState,
+                                          (c) => tempCorPrincipal = c,
+                                        ),
+                                      )
+                                      .toList(),
+                            ),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text(
+                                "Mostrar faixas boa/media/ruim",
+                              ),
+                              value: tempGaugeRanges,
+                              onChanged: (v) =>
+                                  setModalState(() => tempGaugeRanges = v),
+                            ),
+                          ],
+                          if (config.tipo.contains('KPI') ||
+                              config.tipo.contains('Cartao') ||
+                              config.tipo.contains('Cartão')) ...[
+                            const Divider(height: 32),
+                            const Text(
+                              "Cartao KPI",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blueGrey,
+                              ),
+                            ),
+                            TextField(
+                              decoration: const InputDecoration(
+                                labelText: "Prefixo",
+                              ),
+                              controller: TextEditingController(
+                                text: tempKpiPrefixo,
+                              ),
+                              onChanged: (v) => tempKpiPrefixo = v,
+                            ),
+                            TextField(
+                              decoration: const InputDecoration(
+                                labelText: "Sufixo",
+                              ),
+                              controller: TextEditingController(
+                                text: tempKpiSufixo,
+                              ),
+                              onChanged: (v) => tempKpiSufixo = v,
+                            ),
+                            Text(
+                              "Tamanho do numero: ${tempKpiFontSize.toStringAsFixed(0)}",
+                            ),
+                            Slider(
+                              value: tempKpiFontSize,
+                              min: 24,
+                              max: 72,
+                              onChanged: (v) =>
+                                  setModalState(() => tempKpiFontSize = v),
+                            ),
+                            Text("Casas decimais: $tempKpiDecimais"),
+                            Slider(
+                              value: tempKpiDecimais.toDouble(),
+                              min: 0,
+                              max: 3,
+                              divisions: 3,
+                              onChanged: (v) => setModalState(
+                                () => tempKpiDecimais = v.round(),
+                              ),
+                            ),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text("Mostrar meta"),
+                              value: tempKpiShowMeta,
+                              onChanged: (v) =>
+                                  setModalState(() => tempKpiShowMeta = v),
+                            ),
+                            Text("Meta: ${tempKpiMeta.toStringAsFixed(0)}"),
+                            Slider(
+                              value: tempKpiMeta,
+                              min: 0,
+                              max: 10000000,
+                              onChanged: (v) =>
+                                  setModalState(() => tempKpiMeta = v),
+                            ),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text("Mostrar tendencia"),
+                              value: tempKpiShowTrend,
+                              onChanged: (v) =>
+                                  setModalState(() => tempKpiShowTrend = v),
+                            ),
+                            Text(
+                              "Valor anterior: ${tempKpiPrevious.toStringAsFixed(0)}",
+                            ),
+                            Slider(
+                              value: tempKpiPrevious,
+                              min: 0,
+                              max: 10000000,
+                              onChanged: (v) =>
+                                  setModalState(() => tempKpiPrevious = v),
+                            ),
+                          ],
+                          if (config.tipo.contains('Tabela')) ...[
+                            const Divider(height: 32),
+                            const Text(
+                              "Tabela",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blueGrey,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text("Cor do cabecalho"),
+                            Wrap(
+                              spacing: 12,
+                              children:
+                                  [
+                                        const Color(0xFF1D4ED8),
+                                        const Color(0xFF1E1B4B),
+                                        const Color(0xFF0F5592),
+                                        const Color(0xFF111827),
+                                      ]
+                                      .map(
+                                        (cor) => _botaoCor(
+                                          tempHeaderTabela,
+                                          cor,
+                                          setModalState,
+                                          (c) => tempHeaderTabela = c,
+                                        ),
+                                      )
+                                      .toList(),
+                            ),
+                            const SizedBox(height: 12),
+                            const Text("Cor da linha total"),
+                            Wrap(
+                              spacing: 12,
+                              children:
+                                  [
+                                        const Color(0xFFFDE047),
+                                        const Color(0xFFBBF7D0),
+                                        const Color(0xFFFFEDD5),
+                                        const Color(0xFFE0E7FF),
+                                      ]
+                                      .map(
+                                        (cor) => _botaoCor(
+                                          tempTotalTabela,
+                                          cor,
+                                          setModalState,
+                                          (c) => tempTotalTabela = c,
+                                        ),
+                                      )
+                                      .toList(),
+                            ),
+                            const SizedBox(height: 12),
+                            const Text("Cor das linhas alternadas"),
+                            Wrap(
+                              spacing: 12,
+                              children:
+                                  [
+                                        Colors.white,
+                                        const Color(0xFFF1F5F9),
+                                        const Color(0xFFEFF6FF),
+                                        const Color(0xFFFFFBEB),
+                                      ]
+                                      .map(
+                                        (cor) => _botaoCor(
+                                          tempRowColorA,
+                                          cor,
+                                          setModalState,
+                                          (c) => tempRowColorA = c,
+                                        ),
+                                      )
+                                      .toList(),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 12,
+                              children:
+                                  [
+                                        const Color(0xFFF8FAFC),
+                                        const Color(0xFFE2E8F0),
+                                        const Color(0xFFDBEAFE),
+                                        const Color(0xFFDCFCE7),
+                                      ]
+                                      .map(
+                                        (cor) => _botaoCor(
+                                          tempRowColorB,
+                                          cor,
+                                          setModalState,
+                                          (c) => tempRowColorB = c,
+                                        ),
+                                      )
+                                      .toList(),
+                            ),
+                            const SizedBox(height: 12),
+                            const Text("Cor das grades"),
+                            Wrap(
+                              spacing: 12,
+                              children:
+                                  [
+                                        const Color(0xFFE2E8F0),
+                                        const Color(0xFF94A3B8),
+                                        const Color(0xFF60A5FA),
+                                        const Color(0xFFCBD5E1),
+                                      ]
+                                      .map(
+                                        (cor) => _botaoCor(
+                                          tempGridColor,
+                                          cor,
+                                          setModalState,
+                                          (c) => tempGridColor = c,
+                                        ),
+                                      )
+                                      .toList(),
+                            ),
+                            Text(
+                              "Altura das linhas: ${tempRowHeight.toStringAsFixed(0)}",
+                            ),
+                            Slider(
+                              value: tempRowHeight,
+                              min: 24,
+                              max: 56,
+                              onChanged: (v) =>
+                                  setModalState(() => tempRowHeight = v),
+                            ),
+                          ],
+                          if (config.tipo.contains('Segment')) ...[
+                            const Divider(height: 32),
+                            const Text(
+                              "Segmentacao",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blueGrey,
+                              ),
+                            ),
+                            Text(
+                              "Raio dos botoes: ${tempChipRadius.toStringAsFixed(0)}",
+                            ),
+                            Slider(
+                              value: tempChipRadius,
+                              min: 0,
+                              max: 28,
+                              onChanged: (v) =>
+                                  setModalState(() => tempChipRadius = v),
+                            ),
+                            const Text(
+                              "Cor dos botoes",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blueGrey,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 12,
+                              children:
+                                  [
+                                        const Color(0xFF0F5592),
+                                        const Color(0xFF2563EB),
+                                        const Color(0xFF1D4ED8),
+                                        const Color(0xFF0F172A),
+                                      ]
+                                      .map(
+                                        (cor) => _botaoCor(
+                                          tempCorPrincipal,
+                                          cor,
+                                          setModalState,
+                                          (c) => tempCorPrincipal = c,
+                                        ),
+                                      )
+                                      .toList(),
+                            ),
+                            DropdownButtonFormField<String>(
+                              value: tempSlicerStyle,
+                              decoration: const InputDecoration(
+                                labelText: "Estilo",
+                              ),
+                              items: const [
+                                DropdownMenuItem(
+                                  value: 'botoes',
+                                  child: Text("Botoes"),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'lista',
+                                  child: Text("Lista"),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'tags',
+                                  child: Text("Tags"),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'dropdown',
+                                  child: Text("Dropdown"),
+                                ),
+                              ],
+                              onChanged: (v) => setModalState(
+                                () => tempSlicerStyle = v ?? 'botoes',
+                              ),
+                            ),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text("Mostrar busca"),
+                              value: tempSlicerSearch,
+                              onChanged: (v) =>
+                                  setModalState(() => tempSlicerSearch = v),
+                            ),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text("Permitir selecao multipla"),
+                              value: tempSegmentacaoMultipla,
+                              onChanged: (v) => setModalState(
+                                () => tempSegmentacaoMultipla = v,
+                              ),
+                            ),
+                          ],
+                          if (config.tipo.contains('Treemap')) ...[
+                            const Divider(height: 32),
+                            const Text(
+                              "Treemap",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blueGrey,
+                              ),
+                            ),
+                            Text(
+                              "Espacamento entre blocos: ${tempTreemapSpacing.toStringAsFixed(0)}",
+                            ),
+                            Slider(
+                              value: tempTreemapSpacing,
+                              min: 0,
+                              max: 10,
+                              onChanged: (v) =>
+                                  setModalState(() => tempTreemapSpacing = v),
+                            ),
+                          ],
+                          const Divider(height: 32),
+                          const Text(
+                            "Interacoes, animacoes e exportacao",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                          SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text("Tooltip ativo"),
+                            value: tempTooltipAtivo,
+                            onChanged: (v) =>
+                                setModalState(() => tempTooltipAtivo = v),
+                          ),
+                          SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text("Filtrar outros visuais"),
+                            value: tempInteracaoFiltrar,
+                            onChanged: (v) =>
+                                setModalState(() => tempInteracaoFiltrar = v),
+                          ),
+                          SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text("Destacar selecao"),
+                            value: tempInteracaoDestacar,
+                            onChanged: (v) =>
+                                setModalState(() => tempInteracaoDestacar = v),
+                          ),
+                          SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text("Drill-through"),
+                            value: tempDrillthrough,
+                            onChanged: (v) =>
+                                setModalState(() => tempDrillthrough = v),
+                          ),
+                          SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text("Navegacao"),
+                            value: tempNavegacao,
+                            onChanged: (v) =>
+                                setModalState(() => tempNavegacao = v),
+                          ),
+                          Wrap(
+                            spacing: 8,
+                            children: [
+                              FilterChip(
+                                label: const Text("PNG"),
+                                selected: tempExportPng,
+                                onSelected: (v) =>
+                                    setModalState(() => tempExportPng = v),
+                              ),
+                              FilterChip(
+                                label: const Text("PDF"),
+                                selected: tempExportPdf,
+                                onSelected: (v) =>
+                                    setModalState(() => tempExportPdf = v),
+                              ),
+                              FilterChip(
+                                label: const Text("CSV"),
+                                selected: tempExportCsv,
+                                onSelected: (v) =>
+                                    setModalState(() => tempExportCsv = v),
+                              ),
+                              FilterChip(
+                                label: const Text("Excel"),
+                                selected: tempExportExcel,
+                                onSelected: (v) =>
+                                    setModalState(() => tempExportExcel = v),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
                     ),
@@ -844,6 +1812,38 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                             config.fontSizeTitulo = tempFontSize;
                             config.alinhamentoTitulo = tempAlinhamento;
                             config.posicaoLegenda = tempPosicaoLegenda;
+                            config.configExtra['showTitle'] = tempMostrarTitulo;
+                            config.configExtra['titleBold'] = tempTituloNegrito;
+                            config.configExtra['titleItalic'] =
+                                tempTituloItalico;
+                            config.configExtra['titleUnderline'] =
+                                tempTituloSublinhado;
+                            config.configExtra['showSubtitle'] =
+                                tempMostrarSubtitulo;
+                            config.configExtra['subtitleText'] =
+                                subtituloController.text;
+                            config.configExtra['subtitleSize'] =
+                                tempSubtituloSize;
+                            config.configExtra['subtitleColor'] =
+                                tempSubtituloColor.value.toString();
+                            config.configExtra['descriptionText'] =
+                                descricaoController.text;
+                            config.configExtra['backgroundOpacity'] =
+                                tempBgOpacity;
+                            config.configExtra['borderVisible'] =
+                                tempBorderVisible;
+                            config.configExtra['borderColor'] = tempBorderColor
+                                .value
+                                .toString();
+                            config.configExtra['shadowOpacity'] =
+                                tempShadowOpacity;
+                            config.configExtra['shadowBlur'] = tempShadowBlur;
+                            config.configExtra['minWidth'] = tempMinWidth;
+                            config.configExtra['minHeight'] = tempMinHeight;
+                            config.configExtra['contentPadding'] =
+                                tempContentPadding;
+                            config.configExtra['plotPadding'] = tempPlotPadding;
+                            config.configExtra['borderWidth'] = tempBorderWidth;
                             config.configExtra['raioFuro'] = tempRaioFuro;
                             config.configExtra['mostrarPorcentagem'] =
                                 tempMostrarPorcentagem;
@@ -851,6 +1851,77 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                                 tempMostrarPontos;
                             config.configExtra['espessuraLinha'] =
                                 tempEspessuraLinha;
+                            config.configExtra['lineColor'] = tempLineColor
+                                .value
+                                .toString();
+                            config.configExtra['markerSize'] = tempMarkerSize;
+                            config.configExtra['barGap'] = tempBarGap;
+                            config.configExtra['barOpacity'] = tempBarOpacity;
+                            config.configExtra['barBorderWidth'] =
+                                tempBarBorderWidth;
+                            config.configExtra['barColorMode'] =
+                                tempBarColorMode;
+                            config.configExtra['sliceOpacity'] =
+                                tempSliceOpacity;
+                            config.configExtra['gaugeMin'] = tempGaugeMin;
+                            config.configExtra['gaugeMax'] = tempGaugeMax;
+                            config.configExtra['gaugeMeta'] = tempGaugeMeta;
+                            config.configExtra['gaugeMostrarFaixas'] =
+                                tempGaugeRanges;
+                            config.configExtra['prefixo'] = tempKpiPrefixo;
+                            config.configExtra['sufixo'] = tempKpiSufixo;
+                            config.configExtra['decimais'] = tempKpiDecimais;
+                            config.configExtra['kpiFontSize'] = tempKpiFontSize;
+                            config.configExtra['kpiShowMeta'] = tempKpiShowMeta;
+                            config.configExtra['kpiMeta'] = tempKpiMeta;
+                            config.configExtra['kpiShowTrend'] =
+                                tempKpiShowTrend;
+                            config.configExtra['kpiPrevious'] = tempKpiPrevious;
+                            config.configExtra['corPrincipal'] =
+                                tempCorPrincipal.value.toString();
+                            config.configExtra['headerColor'] = tempHeaderTabela
+                                .value
+                                .toString();
+                            config.configExtra['totalColor'] = tempTotalTabela
+                                .value
+                                .toString();
+                            config.configExtra['rowColorA'] = tempRowColorA
+                                .value
+                                .toString();
+                            config.configExtra['rowColorB'] = tempRowColorB
+                                .value
+                                .toString();
+                            config.configExtra['gridColor'] = tempGridColor
+                                .value
+                                .toString();
+                            config.configExtra['rowHeight'] = tempRowHeight;
+                            config.configExtra['chipRadius'] = tempChipRadius;
+                            config.configExtra['segmentacaoMultipla'] =
+                                tempSegmentacaoMultipla;
+                            config.configExtra['slicerStyle'] = tempSlicerStyle;
+                            config.configExtra['slicerSearch'] =
+                                tempSlicerSearch;
+                            config.configExtra['treemapSpacing'] =
+                                tempTreemapSpacing;
+                            config.configExtra['tooltipEnabled'] =
+                                tempTooltipAtivo;
+                            config.configExtra['interactionFilter'] =
+                                tempInteracaoFiltrar;
+                            config.configExtra['interactionHighlight'] =
+                                tempInteracaoDestacar;
+                            config.configExtra['interactionDrillthrough'] =
+                                tempDrillthrough;
+                            config.configExtra['interactionNavigation'] =
+                                tempNavegacao;
+                            config.configExtra['animationIn'] =
+                                tempAnimationEntrada;
+                            config.configExtra['animationUpdate'] =
+                                tempAnimationUpdate;
+                            config.configExtra['exportPng'] = tempExportPng;
+                            config.configExtra['exportPdf'] = tempExportPdf;
+                            config.configExtra['exportCsv'] = tempExportCsv;
+                            config.configExtra['exportExcel'] = tempExportExcel;
+                            config.configExtra['themePreset'] = tempThemePreset;
                           });
                           Navigator.pop(context);
                         },
@@ -864,7 +1935,11 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
           },
         );
       },
-    ).whenComplete(() => tituloController.dispose());
+    ).whenComplete(() {
+      tituloController.dispose();
+      subtituloController.dispose();
+      descricaoController.dispose();
+    });
   }
 
   Widget _botaoCor(
@@ -893,10 +1968,159 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
     );
   }
 
-  Widget _buildConteudoComLegenda(ChartConfig config) {
-    Widget chartWidget = Expanded(child: ChartRenderer(config: config));
+  Color _corConfig(dynamic value, Color fallback) {
+    if (value is Color) return value;
+    if (value is int) return Color(value);
+    if (value is String) {
+      final parsed = int.tryParse(value);
+      if (parsed != null) return Color(parsed);
+      if (value.startsWith('#')) {
+        return Color(int.parse(value.replaceFirst('#', '0xFF')));
+      }
+    }
+    return fallback;
+  }
 
-    if (!config.mostrarLegenda || config.dados.isEmpty) return chartWidget;
+  List<dynamic> get _dadosBrutosAtuais =>
+      DashboardManager.dadosFonteAtual?['dados_brutos'] ??
+      DashboardManager.dadosFonteAtual?['dados_planilha']?['dados_brutos'] ??
+      [];
+
+  List<Map<String, dynamic>> _calcularDadosFiltrados(ChartConfig config) {
+    final dadosBrutos = _dadosBrutosAtuais;
+    if (dadosBrutos.isEmpty || _filtrosSegmentacao.isEmpty) {
+      return config.dados;
+    }
+
+    final linhasFiltradas = dadosBrutos.where((linha) {
+      if (linha is! Map) return false;
+      for (final filtro in _filtrosSegmentacao.entries) {
+        if (filtro.value.isEmpty) continue;
+        final valor = linha[filtro.key]?.toString() ?? '';
+        if (!filtro.value.contains(valor)) return false;
+      }
+      return true;
+    });
+
+    final agrupamento = <String, List<double>>{};
+    for (final linha in linhasFiltradas) {
+      if (linha is! Map) continue;
+      final chave = linha[config.dimensao]?.toString().trim().isNotEmpty == true
+          ? linha[config.dimensao].toString()
+          : 'Desconhecido';
+      final raw = linha[config.metrica];
+      final valor = raw is num
+          ? raw.toDouble()
+          : double.tryParse(raw.toString().replaceAll(',', '.')) ?? 0.0;
+      agrupamento.putIfAbsent(chave, () => []).add(valor);
+    }
+
+    final paleta = [
+      const Color(0xFF2563EB),
+      const Color(0xFF10B981),
+      const Color(0xFFF59E0B),
+      const Color(0xFFEF4444),
+      const Color(0xFF8B5CF6),
+      const Color(0xFF14B8A6),
+      const Color(0xFFEC4899),
+      const Color(0xFF64748B),
+    ];
+
+    final agregacao = config.configExtra['agregacao']?.toString() ?? 'Soma';
+    final ordenarDesc = config.configExtra['ordenarDesc'] as bool? ?? true;
+    final limite =
+        ((config.configExtra['limiteItens'] ?? config.dados.length) as num)
+            .round();
+
+    final dados = agrupamento.entries.map((entry) {
+      final valores = entry.value;
+      final soma = valores.fold<double>(0, (total, valor) => total + valor);
+      final valor = switch (agregacao) {
+        'Media' => soma / valores.length,
+        'Contagem' => valores.length.toDouble(),
+        'Maximo' => valores.reduce((a, b) => a > b ? a : b),
+        'Minimo' => valores.reduce((a, b) => a < b ? a : b),
+        _ => soma,
+      };
+      final index = agrupamento.keys.toList().indexOf(entry.key);
+      return {
+        'label': entry.key,
+        'value': valor,
+        'color': paleta[index % paleta.length],
+      };
+    }).toList();
+
+    dados.sort((a, b) {
+      final valorA = (a['value'] as num).toDouble();
+      final valorB = (b['value'] as num).toDouble();
+      return ordenarDesc ? valorB.compareTo(valorA) : valorA.compareTo(valorB);
+    });
+
+    return dados.take(limite <= 0 ? dados.length : limite).toList();
+  }
+
+  ChartConfig _configVisual(ChartConfig config) {
+    final tipo = config.tipo.toLowerCase();
+    if (tipo.contains('segment')) return config;
+    final dados = _calcularDadosFiltrados(config);
+    return ChartConfig(
+      id: config.id,
+      tipo: config.tipo,
+      titulo: config.titulo,
+      dimensao: config.dimensao,
+      metrica: config.metrica,
+      dados: dados,
+      posicao: config.posicao,
+      tamanho: config.tamanho,
+      corFundo: config.corFundo,
+      fontSizeTitulo: config.fontSizeTitulo,
+      alinhamentoTitulo: config.alinhamentoTitulo,
+      corTextoTitulo: config.corTextoTitulo,
+      raioBorda: config.raioBorda,
+      mostrarSombra: config.mostrarSombra,
+      mostrarEixos: config.mostrarEixos,
+      mostrarLegenda: config.mostrarLegenda,
+      posicaoLegenda: config.posicaoLegenda,
+      mostrarValores: config.mostrarValores,
+      mostrarRotulos: config.mostrarRotulos,
+      configExtra: Map<String, dynamic>.from(config.configExtra),
+    );
+  }
+
+  bool _tipoUsaLegenda(String tipo) {
+    final t = tipo.toLowerCase();
+    return !(t.contains('cartao') ||
+        t.contains('kpi') ||
+        t.contains('tabela') ||
+        t.contains('segment') ||
+        t.contains('gauge') ||
+        t.contains('treemap'));
+  }
+
+  Widget _buildConteudoComLegenda(ChartConfig config) {
+    final visualConfig = _configVisual(config);
+    final tipo = config.tipo.toLowerCase();
+    Widget chartWidget = Expanded(
+      child: ChartRenderer(
+        config: visualConfig,
+        filtrosSelecionados: _filtrosSegmentacao[config.dimensao],
+        onSegmentacaoChanged: tipo.contains('segment')
+            ? (selecionados) => setState(() {
+                if (selecionados.isEmpty) {
+                  _filtrosSegmentacao.remove(config.dimensao);
+                } else {
+                  _filtrosSegmentacao[config.dimensao] = selecionados;
+                }
+              })
+            : null,
+      ),
+    );
+
+    if (!_tipoUsaLegenda(config.tipo) ||
+        !visualConfig.mostrarLegenda ||
+        visualConfig.dados.isEmpty) {
+      return chartWidget;
+    }
 
     Widget legenda = Wrap(
       spacing: 8,
@@ -906,7 +2130,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
           (config.posicaoLegenda == 'left' || config.posicaoLegenda == 'right')
           ? Axis.vertical
           : Axis.horizontal,
-      children: config.dados
+      children: visualConfig.dados
           .map(
             (d) => Row(
               mainAxisSize: MainAxisSize.min,
@@ -978,8 +2202,34 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
     if (config.alinhamentoTitulo == 'right') alignTitulo = TextAlign.right;
 
     // 1. APAGUE a variÃ¡vel "Offset posicaoToque = Offset.zero;" que ficava aqui
-    const double minSize = 200.0;
     const double espessuraBorda = 12.0;
+    final minWidth = ((config.configExtra['minWidth'] ?? 200) as num)
+        .toDouble();
+    final minHeight = ((config.configExtra['minHeight'] ?? 200) as num)
+        .toDouble();
+    final contentPadding = ((config.configExtra['contentPadding'] ?? 8) as num)
+        .toDouble();
+    final borderWidth = ((config.configExtra['borderWidth'] ?? 1) as num)
+        .toDouble();
+    final showTitle = config.configExtra['showTitle'] as bool? ?? true;
+    final showSubtitle = config.configExtra['showSubtitle'] as bool? ?? false;
+    final subtitleText = config.configExtra['subtitleText']?.toString() ?? '';
+    final subtitleColor = _corConfig(
+      config.configExtra['subtitleColor'],
+      const Color(0xFF64748B),
+    );
+    final subtitleSize = ((config.configExtra['subtitleSize'] ?? 12) as num)
+        .toDouble();
+    final borderVisible = config.configExtra['borderVisible'] as bool? ?? true;
+    final borderColor = _corConfig(
+      config.configExtra['borderColor'],
+      Colors.blueGrey.shade100,
+    );
+    final bgOpacity = ((config.configExtra['backgroundOpacity'] ?? 1) as num)
+        .toDouble();
+    final shadowOpacity = ((config.configExtra['shadowOpacity'] ?? 0.12) as num)
+        .toDouble();
+    final showHeader = showTitle || (showSubtitle && subtitleText.isNotEmpty);
 
     return SizedBox(
       width: config.tamanho.width,
@@ -999,63 +2249,44 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                   _mostrarMenuContexto(context, config, details.globalPosition);
                 },
                 child: Card(
-                  color: config.corFundo,
-                  elevation: 2, // Sombra suave para destacar do fundo cinza
-                  shadowColor: Colors.black12,
+                  color: config.corFundo.withValues(alpha: bgOpacity),
+                  elevation: config.mostrarSombra ? 2 : 0,
+                  shadowColor: Colors.black.withValues(alpha: shadowOpacity),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(
-                      12,
+                      config.raioBorda,
                     ), // Bordas mais modernas
-                    side: BorderSide(color: Colors.blueGrey.shade100, width: 1),
+                    side: BorderSide(
+                      color: borderVisible ? borderColor : Colors.transparent,
+                      width: borderVisible ? borderWidth : 0,
+                    ),
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       // CABEÃ‡ALHO DISCRETO
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: config.corFundo, // Fundo igual ao card
-                          border: Border(
-                            bottom: BorderSide(
-                              color: Colors.blueGrey.shade50,
-                              width: 1,
+                      if (showHeader)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: config.corFundo, // Fundo igual ao card
+                            border: Border(
+                              bottom: BorderSide(
+                                color: Colors.blueGrey.shade50,
+                                width: 1,
+                              ),
                             ),
                           ),
-                        ),
-                        child: Row(
-                          children: [
-                            GestureDetector(
-                              onPanStart: (_) => _trazerParaFrente(
-                                config,
-                              ), // <--- TrÃ¡s para frente ao comeÃ§ar arrastar
-                              onPanUpdate: (details) => setState(
-                                () => config.posicao += details.delta,
-                              ),
-                              onPanEnd: (_) => setState(
-                                () => config.posicao = Offset(
-                                  _snap(config.posicao.dx),
-                                  _snap(config.posicao.dy),
-                                ),
-                              ),
-                              // Ãcone de arraste super discreto e com cor suave
-                              child: const MouseRegion(
-                                cursor: SystemMouseCursors.move,
-                                child: Icon(
-                                  Icons.drag_indicator,
-                                  size: 16,
-                                  color: Color(0xFFCBD5E1),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: GestureDetector(
-                                onPanStart: (_) => _trazerParaFrente(config),
+                          child: Row(
+                            children: [
+                              GestureDetector(
+                                onPanStart: (_) => _trazerParaFrente(
+                                  config,
+                                ), // <--- TrÃ¡s para frente ao comeÃ§ar arrastar
                                 onPanUpdate: (details) => setState(
                                   () => config.posicao += details.delta,
                                 ),
@@ -1065,26 +2296,85 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                                     _snap(config.posicao.dy),
                                   ),
                                 ),
-                                child: Text(
-                                  config.titulo,
-                                  textAlign: alignTitulo,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: config.fontSizeTitulo,
-                                    color: config.corTextoTitulo,
+                                // Ãcone de arraste super discreto e com cor suave
+                                child: const MouseRegion(
+                                  cursor: SystemMouseCursors.move,
+                                  child: Icon(
+                                    Icons.drag_indicator,
+                                    size: 16,
+                                    color: Color(0xFFCBD5E1),
                                   ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: GestureDetector(
+                                  onPanStart: (_) => _trazerParaFrente(config),
+                                  onPanUpdate: (details) => setState(
+                                    () => config.posicao += details.delta,
+                                  ),
+                                  onPanEnd: (_) => setState(
+                                    () => config.posicao = Offset(
+                                      _snap(config.posicao.dx),
+                                      _snap(config.posicao.dy),
+                                    ),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      if (showTitle)
+                                        Text(
+                                          config.titulo,
+                                          textAlign: alignTitulo,
+                                          style: TextStyle(
+                                            fontWeight:
+                                                (config.configExtra['titleBold']
+                                                        as bool? ??
+                                                    true)
+                                                ? FontWeight.w700
+                                                : FontWeight.w400,
+                                            fontStyle:
+                                                (config.configExtra['titleItalic']
+                                                        as bool? ??
+                                                    false)
+                                                ? FontStyle.italic
+                                                : FontStyle.normal,
+                                            decoration:
+                                                (config.configExtra['titleUnderline']
+                                                        as bool? ??
+                                                    false)
+                                                ? TextDecoration.underline
+                                                : TextDecoration.none,
+                                            fontSize: config.fontSizeTitulo,
+                                            color: config.corTextoTitulo,
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      if (showSubtitle &&
+                                          subtitleText.isNotEmpty)
+                                        Text(
+                                          subtitleText,
+                                          textAlign: alignTitulo,
+                                          style: TextStyle(
+                                            fontSize: subtitleSize,
+                                            color: subtitleColor,
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
 
                       Expanded(
                         child: Padding(
-                          padding: const EdgeInsets.all(16.0),
+                          padding: EdgeInsets.all(contentPadding),
                           child: _buildConteudoComLegenda(config),
                         ),
                       ),
@@ -1105,7 +2395,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                   onPanUpdate: (details) => setState(() {
                     double novaLargura =
                         config.tamanho.width + details.delta.dx;
-                    if (novaLargura >= minSize)
+                    if (novaLargura >= minWidth)
                       config.tamanho = Size(novaLargura, config.tamanho.height);
                   }),
                   onPanEnd: (_) => setState(
@@ -1133,7 +2423,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                   onPanUpdate: (details) => setState(() {
                     double novaLargura =
                         config.tamanho.width - details.delta.dx;
-                    if (novaLargura >= minSize) {
+                    if (novaLargura >= minWidth) {
                       config.posicao = Offset(
                         config.posicao.dx + details.delta.dx,
                         config.posicao.dy,
@@ -1170,7 +2460,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                   onPanUpdate: (details) => setState(() {
                     double novaAltura =
                         config.tamanho.height + details.delta.dy;
-                    if (novaAltura >= minSize)
+                    if (novaAltura >= minHeight)
                       config.tamanho = Size(config.tamanho.width, novaAltura);
                   }),
                   onPanEnd: (_) => setState(
@@ -1198,7 +2488,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                   onPanUpdate: (details) => setState(() {
                     double novaAltura =
                         config.tamanho.height - details.delta.dy;
-                    if (novaAltura >= minSize) {
+                    if (novaAltura >= minHeight) {
                       config.posicao = Offset(
                         config.posicao.dx,
                         config.posicao.dy + details.delta.dy,
@@ -1238,8 +2528,8 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                     double novaAltura =
                         config.tamanho.height + details.delta.dy;
                     config.tamanho = Size(
-                      novaLargura > minSize ? novaLargura : minSize,
-                      novaAltura > minSize ? novaAltura : minSize,
+                      novaLargura > minWidth ? novaLargura : minWidth,
+                      novaAltura > minHeight ? novaAltura : minHeight,
                     );
                   }),
                   onPanEnd: (_) => setState(() {

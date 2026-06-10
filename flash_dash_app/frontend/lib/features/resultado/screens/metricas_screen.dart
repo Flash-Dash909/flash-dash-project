@@ -27,12 +27,28 @@ class _MetricasScreenState extends State<MetricasScreen> {
 
   String _tituloPersonalizado = "";
   bool _tituloEditadoManualmente = false;
+  bool _mostrarTitulo = true;
+  bool _tituloNegrito = true;
+  bool _tituloItalico = false;
+  bool _tituloSublinhado = false;
+  bool _mostrarSubtitulo = false;
+  String _subtitulo = '';
+  double _subtituloSize = 12.0;
+  Color _subtituloColor = const Color(0xFF64748B);
+  String _descricao = '';
   Color _corFundo = Colors.white;
+  double _backgroundOpacity = 1.0;
   Color _corTextoTitulo = const Color(0xFF0F172A);
   double _fontSizeTitulo = 14.0;
   String _alinhamentoTitulo = 'left';
   double _raioBorda = 12.0;
+  bool _mostrarBorda = true;
+  Color _corBorda = const Color(0xFFE2E8F0);
   bool _mostrarSombra = true;
+  double _shadowOpacity = 0.12;
+  double _shadowBlur = 10.0;
+  double _minWidth = 200.0;
+  double _minHeight = 200.0;
   bool _mostrarEixos = true;
   bool _mostrarLegenda = true;
   String _posicaoLegenda = 'bottom';
@@ -42,6 +58,52 @@ class _MetricasScreenState extends State<MetricasScreen> {
   double _espessuraLinha = 3.0;
   double _raioFuro = 0.0;
   bool _mostrarPorcentagem = false;
+  double _gaugeMin = 0.0;
+  double _gaugeMax = 100.0;
+  double _gaugeMeta = 80.0;
+  String _kpiPrefixo = '';
+  String _kpiSufixo = '';
+  int _kpiDecimais = 0;
+  double _kpiFontSize = 44.0;
+  Color _corPrincipal = const Color(0xFF2563EB);
+  Color _headerTabela = const Color(0xFF1D4ED8);
+  Color _totalTabela = const Color(0xFFFDE047);
+  Color _rowTabelaA = Colors.white;
+  Color _rowTabelaB = const Color(0xFFF1F5F9);
+  Color _gridTabela = const Color(0xFFE2E8F0);
+  double _chipRadius = 8.0;
+  bool _segmentacaoMultipla = true;
+  String _slicerStyle = 'botoes';
+  bool _slicerSearch = false;
+  double _contentPadding = 8.0;
+  double _plotPadding = 6.0;
+  double _borderWidth = 1.0;
+  double _rowHeight = 34.0;
+  double _barGap = 0.04;
+  double _barOpacity = 1.0;
+  double _barBorderWidth = 0.0;
+  String _barColorMode = 'categoria';
+  Color _lineColor = const Color(0xFF2563EB);
+  double _markerSize = 4.0;
+  double _sliceOpacity = 1.0;
+  bool _gaugeRanges = false;
+  bool _kpiShowMeta = false;
+  double _kpiMeta = 0.0;
+  bool _kpiShowTrend = false;
+  double _kpiPrevious = 0.0;
+  double _treemapSpacing = 0.0;
+  bool _tooltipEnabled = true;
+  bool _interactionFilter = true;
+  bool _interactionHighlight = true;
+  bool _interactionDrillthrough = false;
+  bool _interactionNavigation = false;
+  String _animationIn = 'instantanea';
+  String _animationUpdate = 'suave';
+  bool _exportPng = true;
+  bool _exportPdf = false;
+  bool _exportCsv = true;
+  bool _exportExcel = false;
+  String _themePreset = 'manual';
 
   List<dynamic> get _dadosBrutos =>
       widget.data['dados_brutos'] ??
@@ -57,7 +119,22 @@ class _MetricasScreenState extends State<MetricasScreen> {
       widget.tipoGrafico.contains('Rosca');
   bool get _isLinhaOuArea =>
       widget.tipoGrafico.contains('Linha') ||
-      widget.tipoGrafico.contains('Área');
+      widget.tipoGrafico.contains('Area');
+
+  bool get _isGauge => widget.tipoGrafico.contains('Gauge');
+  bool get _isKpi =>
+      widget.tipoGrafico.contains('KPI') ||
+      widget.tipoGrafico.contains('Cartao');
+  bool get _isTabela => widget.tipoGrafico.contains('Tabela');
+  bool get _isSegmentacao => widget.tipoGrafico.contains('Segment');
+  bool get _isTreemap => widget.tipoGrafico.contains('Treemap');
+  bool get _usaLegenda =>
+      !(_isKpi || _isTabela || _isSegmentacao || _isGauge || _isTreemap);
+  bool get _usaEixos =>
+      widget.tipoGrafico.contains('Barra') ||
+      widget.tipoGrafico.contains('Coluna') ||
+      _isLinhaOuArea ||
+      widget.tipoGrafico.contains('Dispers');
 
   @override
   void initState() {
@@ -105,10 +182,10 @@ class _MetricasScreenState extends State<MetricasScreen> {
       final valores = entry.value;
       final soma = valores.fold<double>(0, (total, valor) => total + valor);
       final valor = switch (_agregacao) {
-        'Média' => soma / valores.length,
+        'Media' => soma / valores.length,
         'Contagem' => valores.length.toDouble(),
-        'Máximo' => valores.reduce((a, b) => a > b ? a : b),
-        'Mínimo' => valores.reduce((a, b) => a < b ? a : b),
+        'Maximo' => valores.reduce((a, b) => a > b ? a : b),
+        'Minimo' => valores.reduce((a, b) => a < b ? a : b),
         _ => soma,
       };
       final index = agrupamento.keys.toList().indexOf(entry.key);
@@ -156,8 +233,71 @@ class _MetricasScreenState extends State<MetricasScreen> {
         'ordenarDesc': _ordenarDesc,
         'mostrarPontos': _mostrarPontos,
         'espessuraLinha': _espessuraLinha,
+        'showTitle': _mostrarTitulo,
+        'titleBold': _tituloNegrito,
+        'titleItalic': _tituloItalico,
+        'titleUnderline': _tituloSublinhado,
+        'showSubtitle': _mostrarSubtitulo,
+        'subtitleText': _subtitulo,
+        'subtitleSize': _subtituloSize,
+        'subtitleColor': _subtituloColor.value.toString(),
+        'descriptionText': _descricao,
+        'backgroundOpacity': _backgroundOpacity,
+        'borderVisible': _mostrarBorda,
+        'borderColor': _corBorda.value.toString(),
+        'shadowOpacity': _shadowOpacity,
+        'shadowBlur': _shadowBlur,
+        'minWidth': _minWidth,
+        'minHeight': _minHeight,
         'raioFuro': _raioFuro,
         'mostrarPorcentagem': _mostrarPorcentagem,
+        'gaugeMin': _gaugeMin,
+        'gaugeMax': _gaugeMax,
+        'gaugeMeta': _gaugeMeta,
+        'prefixo': _kpiPrefixo,
+        'sufixo': _kpiSufixo,
+        'decimais': _kpiDecimais,
+        'kpiFontSize': _kpiFontSize,
+        'corPrincipal': _corPrincipal.value.toString(),
+        'corMeta': const Color(0xFFEF4444).value.toString(),
+        'headerColor': _headerTabela.value.toString(),
+        'totalColor': _totalTabela.value.toString(),
+        'rowColorA': _rowTabelaA.value.toString(),
+        'rowColorB': _rowTabelaB.value.toString(),
+        'gridColor': _gridTabela.value.toString(),
+        'rowHeight': _rowHeight,
+        'chipRadius': _chipRadius,
+        'segmentacaoMultipla': _segmentacaoMultipla,
+        'slicerStyle': _slicerStyle,
+        'slicerSearch': _slicerSearch,
+        'contentPadding': _contentPadding,
+        'plotPadding': _plotPadding,
+        'borderWidth': _borderWidth,
+        'barGap': _barGap,
+        'barOpacity': _barOpacity,
+        'barBorderWidth': _barBorderWidth,
+        'barColorMode': _barColorMode,
+        'lineColor': _lineColor.value.toString(),
+        'markerSize': _markerSize,
+        'sliceOpacity': _sliceOpacity,
+        'gaugeMostrarFaixas': _gaugeRanges,
+        'kpiShowMeta': _kpiShowMeta,
+        'kpiMeta': _kpiMeta,
+        'kpiShowTrend': _kpiShowTrend,
+        'kpiPrevious': _kpiPrevious,
+        'treemapSpacing': _treemapSpacing,
+        'tooltipEnabled': _tooltipEnabled,
+        'interactionFilter': _interactionFilter,
+        'interactionHighlight': _interactionHighlight,
+        'interactionDrillthrough': _interactionDrillthrough,
+        'interactionNavigation': _interactionNavigation,
+        'animationIn': _animationIn,
+        'animationUpdate': _animationUpdate,
+        'exportPng': _exportPng,
+        'exportPdf': _exportPdf,
+        'exportCsv': _exportCsv,
+        'exportExcel': _exportExcel,
+        'themePreset': _themePreset,
       },
     );
   }
@@ -211,9 +351,9 @@ class _MetricasScreenState extends State<MetricasScreen> {
                         children: [
                           _secao("Dados", [
                             _dropdown(
-                              "Agregação",
+                              "Agregacao",
                               _agregacao,
-                              ['Soma', 'Média', 'Contagem', 'Máximo', 'Mínimo'],
+                              ['Soma', 'Media', 'Contagem', 'Maximo', 'Minimo'],
                               (v) => setModalState(() => _agregacao = v),
                             ),
                             _slider(
@@ -234,11 +374,18 @@ class _MetricasScreenState extends State<MetricasScreen> {
                                   setModalState(() => _ordenarDesc = v),
                             ),
                           ]),
-                          _secao("Título", [
+                          _secao("Aparencia", [
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text("Exibir titulo"),
+                              value: _mostrarTitulo,
+                              onChanged: (v) =>
+                                  setModalState(() => _mostrarTitulo = v),
+                            ),
                             TextField(
                               controller: tituloController,
                               decoration: const InputDecoration(
-                                labelText: "Texto do título",
+                                labelText: "Texto do titulo",
                                 prefixIcon: Icon(Icons.title_rounded),
                               ),
                               onChanged: (v) => setModalState(() {
@@ -247,7 +394,7 @@ class _MetricasScreenState extends State<MetricasScreen> {
                               }),
                             ),
                             _slider(
-                              "Tamanho do título",
+                              "Tamanho do titulo",
                               _fontSizeTitulo,
                               10,
                               28,
@@ -264,8 +411,32 @@ class _MetricasScreenState extends State<MetricasScreen> {
                               (v) =>
                                   setModalState(() => _alinhamentoTitulo = v),
                             ),
+                            Wrap(
+                              spacing: 8,
+                              children: [
+                                FilterChip(
+                                  label: const Text("Negrito"),
+                                  selected: _tituloNegrito,
+                                  onSelected: (v) =>
+                                      setModalState(() => _tituloNegrito = v),
+                                ),
+                                FilterChip(
+                                  label: const Text("Italico"),
+                                  selected: _tituloItalico,
+                                  onSelected: (v) =>
+                                      setModalState(() => _tituloItalico = v),
+                                ),
+                                FilterChip(
+                                  label: const Text("Sublinhado"),
+                                  selected: _tituloSublinhado,
+                                  onSelected: (v) => setModalState(
+                                    () => _tituloSublinhado = v,
+                                  ),
+                                ),
+                              ],
+                            ),
                             _cores(
-                              "Cor do título",
+                              "Cor do titulo",
                               _corTextoTitulo,
                               [
                                 const Color(0xFF0F172A),
@@ -275,8 +446,47 @@ class _MetricasScreenState extends State<MetricasScreen> {
                               ],
                               (c) => setModalState(() => _corTextoTitulo = c),
                             ),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text("Exibir subtitulo"),
+                              value: _mostrarSubtitulo,
+                              onChanged: (v) =>
+                                  setModalState(() => _mostrarSubtitulo = v),
+                            ),
+                            TextField(
+                              decoration: const InputDecoration(
+                                labelText: "Texto do subtitulo",
+                              ),
+                              onChanged: (v) =>
+                                  setModalState(() => _subtitulo = v),
+                            ),
+                            _slider(
+                              "Tamanho do subtitulo",
+                              _subtituloSize,
+                              9,
+                              22,
+                              (v) => setModalState(() => _subtituloSize = v),
+                            ),
+                            _cores(
+                              "Cor do subtitulo",
+                              _subtituloColor,
+                              [
+                                const Color(0xFF64748B),
+                                const Color(0xFF2563EB),
+                                const Color(0xFF0F172A),
+                                const Color(0xFFEF4444),
+                              ],
+                              (c) => setModalState(() => _subtituloColor = c),
+                            ),
+                            TextField(
+                              decoration: const InputDecoration(
+                                labelText: "Descricao / tooltip",
+                              ),
+                              onChanged: (v) =>
+                                  setModalState(() => _descricao = v),
+                            ),
                           ]),
-                          _secao("Cartão", [
+                          _secao("Avancado", [
                             _cores(
                               "Fundo",
                               _corFundo,
@@ -290,6 +500,15 @@ class _MetricasScreenState extends State<MetricasScreen> {
                               (c) => setModalState(() => _corFundo = c),
                             ),
                             _slider(
+                              "Transparencia do fundo",
+                              1 - _backgroundOpacity,
+                              0,
+                              1,
+                              (v) => setModalState(
+                                () => _backgroundOpacity = 1 - v,
+                              ),
+                            ),
+                            _slider(
                               "Raio da borda",
                               _raioBorda,
                               0,
@@ -298,14 +517,116 @@ class _MetricasScreenState extends State<MetricasScreen> {
                             ),
                             SwitchListTile(
                               contentPadding: EdgeInsets.zero,
+                              title: const Text("Exibir borda"),
+                              value: _mostrarBorda,
+                              onChanged: (v) =>
+                                  setModalState(() => _mostrarBorda = v),
+                            ),
+                            _cores(
+                              "Cor da borda",
+                              _corBorda,
+                              [
+                                const Color(0xFFE2E8F0),
+                                const Color(0xFF2563EB),
+                                const Color(0xFF0F172A),
+                                const Color(0xFFEF4444),
+                              ],
+                              (c) => setModalState(() => _corBorda = c),
+                            ),
+                            _slider(
+                              "Borda do cartao",
+                              _borderWidth,
+                              0,
+                              8,
+                              (v) => setModalState(() => _borderWidth = v),
+                            ),
+                            _slider(
+                              "Espacamento interno",
+                              _contentPadding,
+                              0,
+                              32,
+                              (v) => setModalState(() => _contentPadding = v),
+                            ),
+                            _slider(
+                              "Margem interna do grafico",
+                              _plotPadding,
+                              0,
+                              28,
+                              (v) => setModalState(() => _plotPadding = v),
+                            ),
+                            _slider(
+                              "Largura minima",
+                              _minWidth,
+                              120,
+                              500,
+                              (v) => setModalState(() => _minWidth = v),
+                            ),
+                            _slider(
+                              "Altura minima",
+                              _minHeight,
+                              120,
+                              500,
+                              (v) => setModalState(() => _minHeight = v),
+                            ),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
                               title: const Text("Sombra"),
                               value: _mostrarSombra,
                               onChanged: (v) =>
                                   setModalState(() => _mostrarSombra = v),
                             ),
+                            _slider(
+                              "Opacidade da sombra",
+                              _shadowOpacity,
+                              0,
+                              1,
+                              (v) => setModalState(() => _shadowOpacity = v),
+                            ),
+                            _slider(
+                              "Desfoque da sombra",
+                              _shadowBlur,
+                              0,
+                              40,
+                              (v) => setModalState(() => _shadowBlur = v),
+                            ),
                           ]),
-                          _secao("Eixos, rótulos e legenda", [
-                            if (!_isPizzaOuRosca)
+                          if (_usaLegenda)
+                            _secao("Legenda", [
+                              SwitchListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text("Mostrar legenda"),
+                                value: _mostrarLegenda,
+                                onChanged: (v) =>
+                                    setModalState(() => _mostrarLegenda = v),
+                              ),
+                              if (_mostrarLegenda)
+                                _dropdown(
+                                  "Posicao da legenda",
+                                  _posicaoLegenda,
+                                  ['top', 'bottom', 'left', 'right'],
+                                  (v) =>
+                                      setModalState(() => _posicaoLegenda = v),
+                                ),
+                            ]),
+                          _secao("Rotulos", [
+                            if (!_isSegmentacao)
+                              SwitchListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text("Mostrar valores"),
+                                value: _mostrarValores,
+                                onChanged: (v) =>
+                                    setModalState(() => _mostrarValores = v),
+                              ),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text("Mostrar rotulos"),
+                              value: _mostrarRotulos,
+                              onChanged: (v) =>
+                                  setModalState(() => _mostrarRotulos = v),
+                            ),
+                          ]),
+                          if (_usaEixos)
+                            _secao("Eixos", [
                               SwitchListTile(
                                 contentPadding: EdgeInsets.zero,
                                 title: const Text("Mostrar eixos e grade"),
@@ -313,37 +634,13 @@ class _MetricasScreenState extends State<MetricasScreen> {
                                 onChanged: (v) =>
                                     setModalState(() => _mostrarEixos = v),
                               ),
-                            SwitchListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title: const Text("Mostrar valores"),
-                              value: _mostrarValores,
-                              onChanged: (v) =>
-                                  setModalState(() => _mostrarValores = v),
-                            ),
-                            SwitchListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title: const Text("Mostrar rótulos"),
-                              value: _mostrarRotulos,
-                              onChanged: (v) =>
-                                  setModalState(() => _mostrarRotulos = v),
-                            ),
-                            SwitchListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title: const Text("Mostrar legenda"),
-                              value: _mostrarLegenda,
-                              onChanged: (v) =>
-                                  setModalState(() => _mostrarLegenda = v),
-                            ),
-                            if (_mostrarLegenda)
-                              _dropdown(
-                                "Posição da legenda",
-                                _posicaoLegenda,
-                                ['top', 'bottom', 'left', 'right'],
-                                (v) => setModalState(() => _posicaoLegenda = v),
-                              ),
-                          ]),
+                              _dropdown("Escala", 'linear', [
+                                'linear',
+                                'log',
+                              ], (_) {}),
+                            ]),
                           if (_isLinhaOuArea)
-                            _secao("Linha e área", [
+                            _secao("Linha e area", [
                               _slider(
                                 "Espessura da linha",
                                 _espessuraLinha,
@@ -357,6 +654,37 @@ class _MetricasScreenState extends State<MetricasScreen> {
                                 value: _mostrarPontos,
                                 onChanged: (v) =>
                                     setModalState(() => _mostrarPontos = v),
+                              ),
+                            ]),
+                          if (widget.tipoGrafico.contains('Barra') ||
+                              widget.tipoGrafico.contains('Coluna'))
+                            _secao("Barras e colunas", [
+                              _dropdown(
+                                "Cores",
+                                _barColorMode,
+                                ['categoria', 'unica'],
+                                (v) => setModalState(() => _barColorMode = v),
+                              ),
+                              _slider(
+                                "Transparencia",
+                                1 - _barOpacity,
+                                0,
+                                0.9,
+                                (v) => setModalState(() => _barOpacity = 1 - v),
+                              ),
+                              _slider(
+                                "Espacamento",
+                                _barGap,
+                                0,
+                                0.18,
+                                (v) => setModalState(() => _barGap = v),
+                              ),
+                              _slider(
+                                "Espessura da borda",
+                                _barBorderWidth,
+                                0,
+                                6,
+                                (v) => setModalState(() => _barBorderWidth = v),
                               ),
                             ]),
                           if (_isPizzaOuRosca)
@@ -378,7 +706,341 @@ class _MetricasScreenState extends State<MetricasScreen> {
                                 0.82,
                                 (v) => setModalState(() => _raioFuro = v),
                               ),
+                              _slider(
+                                "Transparencia das fatias",
+                                1 - _sliceOpacity,
+                                0,
+                                0.9,
+                                (v) =>
+                                    setModalState(() => _sliceOpacity = 1 - v),
+                              ),
                             ]),
+                          if (_isKpi)
+                            _secao("Cartao KPI", [
+                              TextField(
+                                decoration: const InputDecoration(
+                                  labelText: "Prefixo",
+                                  hintText: r"R$",
+                                ),
+                                onChanged: (v) =>
+                                    setModalState(() => _kpiPrefixo = v),
+                              ),
+                              TextField(
+                                decoration: const InputDecoration(
+                                  labelText: "Sufixo",
+                                  hintText: " Mil",
+                                ),
+                                onChanged: (v) =>
+                                    setModalState(() => _kpiSufixo = v),
+                              ),
+                              _slider(
+                                "Casas decimais",
+                                _kpiDecimais.toDouble(),
+                                0,
+                                3,
+                                (v) => setModalState(
+                                  () => _kpiDecimais = v.round(),
+                                ),
+                              ),
+                              _slider(
+                                "Tamanho do numero",
+                                _kpiFontSize,
+                                24,
+                                72,
+                                (v) => setModalState(() => _kpiFontSize = v),
+                              ),
+                              SwitchListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text("Mostrar meta"),
+                                value: _kpiShowMeta,
+                                onChanged: (v) =>
+                                    setModalState(() => _kpiShowMeta = v),
+                              ),
+                              _slider(
+                                "Meta",
+                                _kpiMeta,
+                                0,
+                                10000000,
+                                (v) => setModalState(() => _kpiMeta = v),
+                              ),
+                              SwitchListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text("Mostrar tendencia"),
+                                value: _kpiShowTrend,
+                                onChanged: (v) =>
+                                    setModalState(() => _kpiShowTrend = v),
+                              ),
+                              _slider(
+                                "Valor anterior",
+                                _kpiPrevious,
+                                0,
+                                10000000,
+                                (v) => setModalState(() => _kpiPrevious = v),
+                              ),
+                            ]),
+                          if (_isGauge)
+                            _secao("Gauge", [
+                              _slider(
+                                "Valor minimo",
+                                _gaugeMin,
+                                0,
+                                100000,
+                                (v) => setModalState(() => _gaugeMin = v),
+                              ),
+                              _slider(
+                                "Valor maximo",
+                                _gaugeMax,
+                                1,
+                                1000000,
+                                (v) => setModalState(() => _gaugeMax = v),
+                              ),
+                              _slider(
+                                "Meta",
+                                _gaugeMeta,
+                                0,
+                                1000000,
+                                (v) => setModalState(() => _gaugeMeta = v),
+                              ),
+                              _cores(
+                                "Cor principal",
+                                _corPrincipal,
+                                [
+                                  const Color(0xFF2563EB),
+                                  const Color(0xFF10B981),
+                                  const Color(0xFFF59E0B),
+                                  const Color(0xFFEF4444),
+                                ],
+                                (c) => setModalState(() => _corPrincipal = c),
+                              ),
+                              SwitchListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text("Mostrar faixas"),
+                                value: _gaugeRanges,
+                                onChanged: (v) =>
+                                    setModalState(() => _gaugeRanges = v),
+                              ),
+                            ]),
+                          if (_isTabela)
+                            _secao("Tabela", [
+                              _cores(
+                                "Cabecalho",
+                                _headerTabela,
+                                [
+                                  const Color(0xFF1D4ED8),
+                                  const Color(0xFF1E1B4B),
+                                  const Color(0xFF0F5592),
+                                  const Color(0xFF111827),
+                                ],
+                                (c) => setModalState(() => _headerTabela = c),
+                              ),
+                              _cores(
+                                "Linha total",
+                                _totalTabela,
+                                [
+                                  const Color(0xFFFDE047),
+                                  const Color(0xFFBBF7D0),
+                                  const Color(0xFFFFEDD5),
+                                  const Color(0xFFE0E7FF),
+                                ],
+                                (c) => setModalState(() => _totalTabela = c),
+                              ),
+                              _cores(
+                                "Linhas alternadas A",
+                                _rowTabelaA,
+                                [
+                                  Colors.white,
+                                  const Color(0xFFF1F5F9),
+                                  const Color(0xFFEFF6FF),
+                                  const Color(0xFFFFFBEB),
+                                ],
+                                (c) => setModalState(() => _rowTabelaA = c),
+                              ),
+                              _cores(
+                                "Linhas alternadas B",
+                                _rowTabelaB,
+                                [
+                                  const Color(0xFFF8FAFC),
+                                  const Color(0xFFE2E8F0),
+                                  const Color(0xFFDBEAFE),
+                                  const Color(0xFFDCFCE7),
+                                ],
+                                (c) => setModalState(() => _rowTabelaB = c),
+                              ),
+                              _cores(
+                                "Grades",
+                                _gridTabela,
+                                [
+                                  const Color(0xFFE2E8F0),
+                                  const Color(0xFF94A3B8),
+                                  const Color(0xFF60A5FA),
+                                  const Color(0xFFCBD5E1),
+                                ],
+                                (c) => setModalState(() => _gridTabela = c),
+                              ),
+                              _slider(
+                                "Altura das linhas",
+                                _rowHeight,
+                                24,
+                                56,
+                                (v) => setModalState(() => _rowHeight = v),
+                              ),
+                            ]),
+                          if (_isSegmentacao)
+                            _secao("Segmentacao", [
+                              _slider(
+                                "Raio dos botoes",
+                                _chipRadius,
+                                0,
+                                28,
+                                (v) => setModalState(() => _chipRadius = v),
+                              ),
+                              _cores(
+                                "Cor dos botoes",
+                                _corPrincipal,
+                                [
+                                  const Color(0xFF0F5592),
+                                  const Color(0xFF2563EB),
+                                  const Color(0xFF1D4ED8),
+                                  const Color(0xFF0F172A),
+                                ],
+                                (c) => setModalState(() => _corPrincipal = c),
+                              ),
+                              SwitchListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text("Permitir selecao multipla"),
+                                value: _segmentacaoMultipla,
+                                onChanged: (v) => setModalState(
+                                  () => _segmentacaoMultipla = v,
+                                ),
+                              ),
+                              _dropdown(
+                                "Estilo",
+                                _slicerStyle,
+                                ['botoes', 'lista', 'tags', 'dropdown'],
+                                (v) => setModalState(() => _slicerStyle = v),
+                              ),
+                              SwitchListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text("Mostrar busca"),
+                                value: _slicerSearch,
+                                onChanged: (v) =>
+                                    setModalState(() => _slicerSearch = v),
+                              ),
+                            ]),
+                          if (_isTreemap)
+                            _secao("Treemap", [
+                              SwitchListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text("Mostrar nomes nos blocos"),
+                                value: _mostrarRotulos,
+                                onChanged: (v) =>
+                                    setModalState(() => _mostrarRotulos = v),
+                              ),
+                              _slider(
+                                "Espacamento entre blocos",
+                                _treemapSpacing,
+                                0,
+                                10,
+                                (v) => setModalState(() => _treemapSpacing = v),
+                              ),
+                            ]),
+                          _secao("Interacoes", [
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text("Tooltip ativo"),
+                              value: _tooltipEnabled,
+                              onChanged: (v) =>
+                                  setModalState(() => _tooltipEnabled = v),
+                            ),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text("Filtrar outros visuais"),
+                              value: _interactionFilter,
+                              onChanged: (v) =>
+                                  setModalState(() => _interactionFilter = v),
+                            ),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text("Destacar selecao"),
+                              value: _interactionHighlight,
+                              onChanged: (v) => setModalState(
+                                () => _interactionHighlight = v,
+                              ),
+                            ),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text("Drill-through"),
+                              value: _interactionDrillthrough,
+                              onChanged: (v) => setModalState(
+                                () => _interactionDrillthrough = v,
+                              ),
+                            ),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text("Navegacao"),
+                              value: _interactionNavigation,
+                              onChanged: (v) => setModalState(
+                                () => _interactionNavigation = v,
+                              ),
+                            ),
+                          ]),
+                          _secao("Animacoes", [
+                            _dropdown(
+                              "Entrada",
+                              _animationIn,
+                              ['instantanea', 'fade', 'zoom', 'slide'],
+                              (v) => setModalState(() => _animationIn = v),
+                            ),
+                            _dropdown(
+                              "Atualizacao",
+                              _animationUpdate,
+                              ['suave', 'instantanea'],
+                              (v) => setModalState(() => _animationUpdate = v),
+                            ),
+                          ]),
+                          _secao("Exportacao e temas", [
+                            Wrap(
+                              spacing: 8,
+                              children: [
+                                FilterChip(
+                                  label: const Text("PNG"),
+                                  selected: _exportPng,
+                                  onSelected: (v) =>
+                                      setModalState(() => _exportPng = v),
+                                ),
+                                FilterChip(
+                                  label: const Text("PDF"),
+                                  selected: _exportPdf,
+                                  onSelected: (v) =>
+                                      setModalState(() => _exportPdf = v),
+                                ),
+                                FilterChip(
+                                  label: const Text("CSV"),
+                                  selected: _exportCsv,
+                                  onSelected: (v) =>
+                                      setModalState(() => _exportCsv = v),
+                                ),
+                                FilterChip(
+                                  label: const Text("Excel"),
+                                  selected: _exportExcel,
+                                  onSelected: (v) =>
+                                      setModalState(() => _exportExcel = v),
+                                ),
+                              ],
+                            ),
+                            _dropdown(
+                              "Preset",
+                              _themePreset,
+                              [
+                                'manual',
+                                'executivo',
+                                'comercial',
+                                'financeiro',
+                                'marketing',
+                              ],
+                              (v) => setModalState(() => _themePreset = v),
+                            ),
+                          ]),
                         ],
                       ),
                     ),
@@ -392,7 +1054,7 @@ class _MetricasScreenState extends State<MetricasScreen> {
                           setState(() {});
                           Navigator.pop(context);
                         },
-                        child: const Text("Aplicar configurações"),
+                        child: const Text("Aplicar configuracoes"),
                       ),
                     ),
                   ),
@@ -585,13 +1247,13 @@ class _MetricasScreenState extends State<MetricasScreen> {
                   ),
                   const SizedBox(height: 16),
                   const Text(
-                    "Dados do gráfico",
+                    "Dados do grafico",
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 24),
                   DropdownButtonFormField<String>(
                     value: dimensoes.contains(dim) ? dim : null,
-                    decoration: const InputDecoration(labelText: "Dimensão"),
+                    decoration: const InputDecoration(labelText: "Dimensao"),
                     items: dimensoes
                         .map(
                           (d) => DropdownMenuItem(
@@ -606,7 +1268,7 @@ class _MetricasScreenState extends State<MetricasScreen> {
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
                     value: metricas.contains(met) ? met : null,
-                    decoration: const InputDecoration(labelText: "Métrica"),
+                    decoration: const InputDecoration(labelText: "Metrica"),
                     items: metricas
                         .map(
                           (m) => DropdownMenuItem(
@@ -635,7 +1297,10 @@ class _MetricasScreenState extends State<MetricasScreen> {
                 decoration: BoxDecoration(
                   color: _corFundo,
                   borderRadius: BorderRadius.circular(_raioBorda),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  border: Border.all(
+                    color: const Color(0xFFE2E8F0),
+                    width: _borderWidth,
+                  ),
                   boxShadow: _mostrarSombra
                       ? const [
                           BoxShadow(
@@ -677,7 +1342,7 @@ class _MetricasScreenState extends State<MetricasScreen> {
                     SizedBox(
                       height: 310,
                       child: Padding(
-                        padding: const EdgeInsets.all(18),
+                        padding: EdgeInsets.all(_contentPadding),
                         child: ChartRenderer(config: configPreview),
                       ),
                     ),
