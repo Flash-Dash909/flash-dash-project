@@ -5,7 +5,8 @@ import 'package:file_picker/file_picker.dart';
 import '../../resultado/screens/selecao_grafico_screen.dart'; 
 
 class UploadScreen extends StatefulWidget {
-  const UploadScreen({super.key});
+  final String usuarioNome;
+  const UploadScreen({super.key, required this.usuarioNome});
 
   @override
   State<UploadScreen> createState() => _UploadScreenState();
@@ -49,7 +50,7 @@ class _UploadScreenState extends State<UploadScreen> {
           if (response.statusCode == 200) {
             final data = json.decode(utf8.decode(response.bodyBytes));
             if (!mounted) return;
-            Navigator.push(context, MaterialPageRoute(builder: (context) => SelecaoGraficoScreen(data: data)));
+            Navigator.push(context, MaterialPageRoute(builder: (context) => SelecaoGraficoScreen(data: data, usuarioNome: widget.usuarioNome)));
           } else {
             throw Exception("Erro no motor Python (FastAPI): Código ${response.statusCode}");
           }

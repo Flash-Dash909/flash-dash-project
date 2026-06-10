@@ -1,23 +1,40 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from db_repository import register_user, authenticate_user
 
-# Cria um roteador para agrupar as rotas de autenticação
 router = APIRouter()
 
-# Define o formato que o Flutter vai enviar no corpo da requisição
+# Payload apenas para Login
 class LoginPayload(BaseModel):
-    usuario: str
+    email: str
+    senha: str
+
+# Payload para Cadastro
+class CadastroPayload(BaseModel):
+    nome: str
+    email: str
     senha: str
 
 @router.post("/login")
 async def fazer_login(payload: LoginPayload):
-    # Validação super básica apenas para demonstração do app
-    if payload.usuario == "admin" and payload.senha == "1234":
+    usuario_db = authenticate_user(payload.email, payload.senha)
+    
+    if isinstance(usuario_db, dict):
         return {
             "status": "success",
-            "mensagem": "Bem-vindo ao Flash Dash!",
-            "token": "token_demo_12345" # Você pode salvar isso no Flutter usando shared_preferences
+            "mensagem": f"Bem-vindo(a), {usuario_db.get('nome')}!",
+            "token": f"token_demo_{usuario_db.get('id')}", 
+            "usuario_id": usuario_db.get('id'),
+            "usuario_nome": usuario_db.get('nome') # <- ADICIONE ESSA LINHA AQUI
         }
     else:
-        # Retorna um erro 401 (Não autorizado) se errar a senha
-        raise HTTPException(status_code=401, detail="Usuário ou senha incorretos")
+        raise HTTPException(status_code=401, detail="E-mail ou senha incorretos")
+
+@router.post("/cadastro")
+async def fazer_cadastro(payload: CadastroPayload):
+    resultado = register_user(payload.nome, payload.email, payload.senha)
+    
+    if resultado["status"] == "success":
+        return {"status": "success", "mensagem": "Conta criada com sucesso! Faça login."}
+    else:
+        raise HTTPException(status_code=400, detail=resultado["message"])

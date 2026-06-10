@@ -7,7 +7,10 @@ import '../dashboard_manager.dart';
 import '../../home/screens/home_screen.dart';
 
 class DashboardCanvasScreen extends StatefulWidget {
-  const DashboardCanvasScreen({super.key});
+  final String usuarioNome; // <- ADICIONE ESSA VARIÁVEL
+
+  // Atualize o construtor para receber o nome
+  const DashboardCanvasScreen({super.key, required this.usuarioNome}); 
 
   @override
   State<DashboardCanvasScreen> createState() => _DashboardCanvasScreenState();
@@ -140,7 +143,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                     if (response.statusCode == 200) {
                       DashboardManager.graficosAtivos.clear();
                       Navigator.pop(dialogContext); 
-                      Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const HomeScreen()), (route) => false);
+                      Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => HomeScreen(usuarioNome: widget.usuarioNome)), (route) => false);
                     }
                   } catch (e) {
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro ao salvar: $e")));

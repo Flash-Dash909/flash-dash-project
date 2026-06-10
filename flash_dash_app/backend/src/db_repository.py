@@ -1,5 +1,7 @@
 from supabase import create_client, Client
 import json
+import hashlib
+from typing import Optional
 
 SUPABASE_URL = "https://qookuziywrysqfzofyve.supabase.co"
 # CUIDADO: É sempre bom esconder essa chave em um arquivo .env depois!
@@ -63,3 +65,45 @@ def get_logs_etl():
     except Exception as e:
         print(f"--- Erro ao buscar logs: {e}")
         return []
+    
+def _hash_senha(senha: str) -> str:
+    """Transforma a senha em um código embaralhado (hash) por segurança"""
+    return hashlib.sha256(senha.encode()).hexdigest()
+
+def register_user(nome: str, email: str, senha: str):
+    try:
+        # 1. Verifica se o email já existe
+        existente = supabase_db.table("usuarios").select("email").eq("email", email).execute()
+        if len(existente.data) > 0:
+            return {"status": "error", "message": "Este e-mail já está cadastrado."}
+
+        # 2. Salva o novo usuário combinando com as colunas do seu banco
+        novo_usuario = {
+            "nome": nome,
+            "email": email,
+            "senha_hash": _hash_senha(senha)
+            # 'id' e 'created_at' o Supabase gera automaticamente
+        }
+        supabase_db.table("usuarios").insert(novo_usuario).execute()
+        return {"status": "success"}
+    except Exception as e:
+        print(f"--- Erro ao registrar usuário: {e}")
+        return {"status": "error", "message": "Falha ao conectar com o banco de dados."}
+
+def authenticate_user(email: str, senha: str) -> Optional[dict]:
+    try:
+        senha_criptografada = _hash_senha(senha)
+        resposta = supabase_db.table("usuarios").select("*").eq("email", email).eq("senha_hash", senha_criptografada).execute()
+        
+        # 1. Verifica se 'data' existe e tem pelo menos 1 item
+        if resposta.data and len(resposta.data) > 0:
+            usuario = resposta.data[0]
+            
+            # 2. Garante ao Pylance que o resultado é de fato um dicionário (JSON Object)
+            if isinstance(usuario, dict):
+                return usuario
+                
+        return None
+    except Exception as e:
+        print(f"--- Erro ao autenticar: {e}")
+        return None

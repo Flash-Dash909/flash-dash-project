@@ -3,8 +3,10 @@ import 'metricas_screen.dart';
 import '../../processamento/screens/etl_history_screen.dart';
 
 class SelecaoGraficoScreen extends StatelessWidget {
+  
   final Map<String, dynamic> data;
-  const SelecaoGraficoScreen({super.key, required this.data});
+  final String usuarioNome; // <- ADICIONE AQUI
+  const SelecaoGraficoScreen({super.key, required this.data, required this.usuarioNome});
 
   @override
   Widget build(BuildContext context) {
@@ -90,7 +92,7 @@ class SelecaoGraficoScreen extends StatelessWidget {
                   child: InkWell(
                     borderRadius: BorderRadius.circular(16),
                     onTap: funciona 
-                      ? () => Navigator.push(context, MaterialPageRoute(builder: (context) => MetricasScreen(data: data, tipoGrafico: grafico['nome'])))
+                      ? () => Navigator.push(context, MaterialPageRoute(builder: (context) => MetricasScreen(data: data, tipoGrafico: grafico['nome'], usuarioNome: usuarioNome,)))
                       : mostrarEmBreve,
                     child: Stack(
                       children: [

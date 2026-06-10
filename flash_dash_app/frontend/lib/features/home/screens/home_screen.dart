@@ -4,9 +4,13 @@ import 'package:http/http.dart' as http;
 import '../../upload/screens/upload_screen.dart'; 
 import '../../dashboard/dashboard_manager.dart'; 
 import '../../dashboard/screens/dashboard_canvas_screen.dart';
+import '../../auth/screens/login_screen.dart'; // Ajuste a pasta se necessário
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final String usuarioNome; // <- Cria a variável que vai receber o nome
+
+  // Atualiza o construtor para exigir o nome
+  const HomeScreen({super.key, required this.usuarioNome}); 
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -47,8 +51,31 @@ class _HomeScreenState extends State<HomeScreen> {
     DashboardManager.graficosAtivos.clear();
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const UploadScreen()),
+      MaterialPageRoute(builder: (context) => UploadScreen(usuarioNome: widget.usuarioNome)),
     );
+  }
+
+  void _fazerLogout() {
+    // No futuro, se você salvar o ID do usuário no SharedPreferences, 
+    // é aqui que você deve limpar os dados salvos antes de sair.
+    
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const LoginScreen()),
+    );
+  }
+
+  // Lógica para pegar o primeiro e o último nome
+  String get _nomeExibicao {
+    String nomeCompleto = widget.usuarioNome.trim();
+    if (nomeCompleto.isEmpty) return "Usuário";
+    
+    List<String> partes = nomeCompleto.split(RegExp(r'\s+')); // Divide o nome pelos espaços
+    if (partes.length <= 1) {
+      return partes.first; // Se só tiver um nome, retorna ele mesmo
+    }
+    
+    return "${partes.first} ${partes.last}"; // Retorna o Primeiro + Último
   }
 
   // ==========================================
@@ -94,15 +121,58 @@ class _HomeScreenState extends State<HomeScreen> {
             padding: const EdgeInsets.all(16.0),
             child: Row(
               children: [
-                CircleAvatar(backgroundColor: Colors.blue.shade50, child: const Icon(Icons.person, color: Color(0xFF2563EB))),
+                CircleAvatar(
+                  backgroundColor: Colors.blue.shade50, 
+                  child: const Icon(Icons.person, color: Color(0xFF2563EB))
+                ),
                 const SizedBox(width: 12),
-                const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text("Rogério Bruno", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                    Text("TCC - Apresentação", style: TextStyle(fontSize: 12, color: Colors.blueGrey)),
-                  ],
-                )
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // === TEXTO DINÂMICO AQUI ===
+                      Text(
+                        _nomeExibicao, 
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const Text("TCC - Apresentação", style: TextStyle(fontSize: 12, color: Colors.blueGrey)),
+                    ],
+                  ),
+                ),
+                
+                // === NOVO BOTÃO DE LOGOUT ===
+                IconButton(
+                  icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+                  tooltip: "Sair do sistema",
+                  onPressed: () {
+                    // Modal de confirmação para evitar cliques acidentais
+                    showDialog(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text("Sair do Flash Dash", style: TextStyle(fontWeight: FontWeight.bold)),
+                        content: const Text("Tem certeza que deseja desconectar?"),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context), 
+                            child: const Text("Cancelar", style: TextStyle(color: Colors.blueGrey))
+                          ),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                            onPressed: () {
+                              Navigator.pop(context); // Fecha o modal
+                              _fazerLogout();         // Chama a função que volta pro Login
+                            },
+                            child: const Text("Sair", style: TextStyle(color: Colors.white)),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+                
               ],
             ),
           )
@@ -354,7 +424,7 @@ class _HomeScreenState extends State<HomeScreen> {
           }
 
           // 3. Abre a tela do Dashboard já com os gráficos renderizados!
-          Navigator.push(context, MaterialPageRoute(builder: (context) => const DashboardCanvasScreen()));
+          Navigator.push(context, MaterialPageRoute(builder: (context) => DashboardCanvasScreen(usuarioNome: widget.usuarioNome)));
         },
         child: Padding(
           padding: const EdgeInsets.all(20.0),

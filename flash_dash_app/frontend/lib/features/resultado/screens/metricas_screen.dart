@@ -5,8 +5,9 @@ import '../../dashboard/screens/dashboard_canvas_screen.dart';
 class MetricasScreen extends StatefulWidget {
   final Map<String, dynamic> data;
   final String tipoGrafico;
+  final String usuarioNome;
 
-  const MetricasScreen({super.key, required this.data, required this.tipoGrafico});
+  const MetricasScreen({super.key, required this.data, required this.tipoGrafico, required this.usuarioNome});
 
   @override
   State<MetricasScreen> createState() => _MetricasScreenState();
@@ -465,7 +466,7 @@ class _MetricasScreenState extends State<MetricasScreen> {
                               }
                             )
                           );
-                          Navigator.push(context, MaterialPageRoute(builder: (context) => const DashboardCanvasScreen()));
+                          Navigator.push(context, MaterialPageRoute(builder: (context) => DashboardCanvasScreen(usuarioNome: widget.usuarioNome)));
                         },
                         icon: const Icon(Icons.check),
                         label: const Text("Adicionar ao Dashboard", style: TextStyle(fontSize: 16)),
