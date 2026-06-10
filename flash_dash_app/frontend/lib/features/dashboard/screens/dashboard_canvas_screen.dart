@@ -178,6 +178,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                       body: json.encode({
                         "titulo": nomeController.text,
                         "graficos_config": configJson,
+                        "usuario_id": DashboardManager.usuarioAtualId,
                       }),
                     );
 

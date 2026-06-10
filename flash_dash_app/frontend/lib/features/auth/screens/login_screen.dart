@@ -1,10 +1,11 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
 
+import '../../dashboard/dashboard_manager.dart';
 import '../../home/screens/home_screen.dart';
-import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -14,158 +15,249 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _confirmPasswordController =
+      TextEditingController();
+
   bool _isLoading = false;
+  bool _isLoginMode = true;
 
   String get _baseUrl {
-    if (!kIsWeb) {
-      return 'http://10.0.2.2:8000';
-    }
-
+    if (!kIsWeb) return 'http://10.0.2.2:8000';
     return 'http://localhost:8000';
   }
 
   @override
   void dispose() {
+    _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
-  Future<void> _fazerLogin() async {
-    setState(() {
-      _isLoading = true;
-    });
+  Future<void> _submitForm() async {
+    if (_emailController.text.trim().isEmpty ||
+        _passwordController.text.isEmpty ||
+        (!_isLoginMode && _nameController.text.trim().isEmpty)) {
+      _mostrarSnackBar('Preencha todos os campos.', Colors.orange);
+      return;
+    }
 
-    final url = Uri.parse('$_baseUrl/auth/login');
+    if (!_isLoginMode &&
+        _passwordController.text != _confirmPasswordController.text) {
+      _mostrarSnackBar('As senhas nao coincidem.', Colors.orange);
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    final endpoint = _isLoginMode ? '/auth/login' : '/auth/cadastro';
+    final body = _isLoginMode
+        ? {
+            'email': _emailController.text.trim(),
+            'senha': _passwordController.text,
+          }
+        : {
+            'nome': _nameController.text.trim(),
+            'email': _emailController.text.trim(),
+            'senha': _passwordController.text,
+          };
 
     try {
       final response = await http.post(
-        url,
+        Uri.parse('$_baseUrl$endpoint'),
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'email': _emailController.text.trim(),
-          'senha': _passwordController.text,
-        }),
+        body: json.encode(body),
       );
+      final data = json.decode(response.body);
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        debugPrint("Token recebido: ${data['token']}");
+        if (_isLoginMode) {
+          DashboardManager.usuarioAtualId =
+              data['usuario_id']?.toString() ??
+              data['usuario']?['id']?.toString();
+          DashboardManager.usuarioAtualNome =
+              data['usuario_nome']?.toString() ??
+              data['usuario']?['nome']?.toString();
 
-        if (mounted) {
+          if (!mounted) return;
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => const HomeScreen()),
           );
+        } else {
+          _mostrarSnackBar(
+            'Conta criada com sucesso. Faca login.',
+            Colors.green,
+          );
+          setState(() {
+            _isLoginMode = true;
+            _passwordController.clear();
+            _confirmPasswordController.clear();
+          });
         }
       } else {
-        var mensagem = 'E-mail ou senha incorretos.';
-        try {
-          final data = json.decode(response.body);
-          mensagem = data['detail'] ?? mensagem;
-        } catch (_) {}
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(mensagem),
-              backgroundColor: Colors.redAccent,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao conectar com o servidor: $e'),
-            backgroundColor: Colors.redAccent,
-          ),
+        _mostrarSnackBar(
+          data['detail'] ?? 'Erro na operacao.',
+          Colors.redAccent,
         );
       }
+    } catch (e) {
+      _mostrarSnackBar('Erro ao conectar com o servidor: $e', Colors.redAccent);
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _mostrarSnackBar(String mensagem, Color cor) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(mensagem), backgroundColor: cor));
+  }
+
+  InputDecoration _inputDecoration(String label, IconData icon) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon, color: const Color(0xFF3F3F46)),
+      filled: true,
+      fillColor: const Color(0xFFF1F5FF),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide.none,
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Icon(Icons.insights, size: 80, color: Color(0xFF2563EB)),
-              const SizedBox(height: 16),
-              const Text(
-                'Flash Dash',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF0F172A),
-                ),
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 430),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 70),
+                  const Icon(
+                    Icons.insights_rounded,
+                    size: 88,
+                    color: Color(0xFF2563EB),
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Flash Dash',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 34,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    _isLoginMode
+                        ? 'Faça login para acessar seus dashboards'
+                        : 'Crie sua conta no Flash Dash',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                  const SizedBox(height: 64),
+                  if (!_isLoginMode) ...[
+                    TextField(
+                      controller: _nameController,
+                      decoration: _inputDecoration(
+                        'Nome completo',
+                        Icons.badge_outlined,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                  ],
+                  TextField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
+                    decoration: _inputDecoration(
+                      'E-mail',
+                      Icons.email_outlined,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  TextField(
+                    controller: _passwordController,
+                    obscureText: true,
+                    decoration: _inputDecoration('Senha', Icons.lock_outline),
+                  ),
+                  if (!_isLoginMode) ...[
+                    const SizedBox(height: 18),
+                    TextField(
+                      controller: _confirmPasswordController,
+                      obscureText: true,
+                      decoration: _inputDecoration(
+                        'Confirmar senha',
+                        Icons.check_circle_outline,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 42),
+                  SizedBox(
+                    height: 62,
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _submitForm,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF2563EB),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: _isLoading
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : Text(
+                              _isLoginMode ? 'ENTRAR' : 'CADASTRAR',
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  TextButton(
+                    onPressed: _isLoading
+                        ? null
+                        : () {
+                            setState(() {
+                              _isLoginMode = !_isLoginMode;
+                              _passwordController.clear();
+                              _confirmPasswordController.clear();
+                            });
+                          },
+                    child: Text(
+                      _isLoginMode
+                          ? 'Não tem uma conta? Cadastre-se'
+                          : 'Já tem uma conta? Faça login',
+                      style: const TextStyle(
+                        color: Color(0xFF2563EB),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 8),
-              const Text(
-                'Faca login para acessar seus dashboards',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 16, color: Color(0xFF64748B)),
-              ),
-              const SizedBox(height: 48),
-              TextField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(
-                  labelText: 'E-mail',
-                  prefixIcon: Icon(Icons.email_outlined),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'Senha',
-                  prefixIcon: Icon(Icons.lock_outline),
-                ),
-              ),
-              const SizedBox(height: 32),
-              SizedBox(
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _fazerLogin,
-                  child: _isLoading
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text('ENTRAR'),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextButton(
-                onPressed: _isLoading
-                    ? null
-                    : () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const RegisterScreen(),
-                          ),
-                        );
-                      },
-                child: const Text('Criar nova conta'),
-              ),
-            ],
+            ),
           ),
         ),
       ),

@@ -21,9 +21,11 @@ class _HomeScreenState extends State<HomeScreen> {
   // ==========================================
   Future<List<dynamic>> _buscarDashboards() async {
     try {
-      var response = await http.get(
-        Uri.parse('http://127.0.0.1:8000/listar-dashboards'),
-      );
+      final usuarioId = DashboardManager.usuarioAtualId;
+      final url = usuarioId == null
+          ? 'http://127.0.0.1:8000/listar-dashboards'
+          : 'http://127.0.0.1:8000/listar-dashboards?usuario_id=$usuarioId';
+      var response = await http.get(Uri.parse(url));
       if (response.statusCode == 200) {
         return json.decode(utf8.decode(response.bodyBytes));
       }
@@ -127,18 +129,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: const Icon(Icons.person, color: Color(0xFF2563EB)),
                 ),
                 const SizedBox(width: 12),
-                const Column(
+                Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "RogÃ©rio Bruno",
-                      style: TextStyle(
+                      DashboardManager.usuarioAtualNome ?? "Flash Dash",
+                      style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
                       ),
                     ),
-                    Text(
-                      "TCC - ApresentaÃ§Ã£o",
+                    const Text(
+                      "Workspace BI",
                       style: TextStyle(fontSize: 12, color: Colors.blueGrey),
                     ),
                   ],

@@ -56,6 +56,8 @@ async def cadastrar_usuario(payload: CadastroPayload):
         "status": "success",
         "mensagem": "Usuario cadastrado com sucesso!",
         "usuario": _usuario_publico(usuario),
+        "usuario_id": usuario.get("id"),
+        "usuario_nome": usuario.get("nome"),
         "token": secrets.token_urlsafe(32),
     }
 
@@ -72,5 +74,7 @@ async def fazer_login(payload: LoginPayload):
         "status": "success",
         "mensagem": "Bem-vindo ao Flash Dash!",
         "usuario": _usuario_publico(usuario),
+        "usuario_id": usuario.get("id"),
+        "usuario_nome": usuario.get("nome"),
         "token": secrets.token_urlsafe(32),
     }

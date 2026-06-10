@@ -2,7 +2,13 @@ import 'package:flutter/material.dart';
 import '../../upload/screens/upload_screen.dart';
 
 class ProjetosScreen extends StatelessWidget {
-  const ProjetosScreen({super.key});
+  final String usuarioNome; // <- ADICIONE ESSA VARIÁVEL
+  final String usuarioId;
+  const ProjetosScreen({
+    super.key,
+    required this.usuarioNome,
+    required this.usuarioId,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -27,20 +33,25 @@ class ProjetosScreen extends StatelessWidget {
             mainAxisSpacing: 16, // Espaçamento vertical entre os itens
           ),
           // +1 para o botão de "Novo Projeto"
-          itemCount: meusProjetos.length + 1, 
+          itemCount: meusProjetos.length + 1,
           itemBuilder: (context, index) {
-            
             // O primeiro item (index 0) será o botão de "Novo Projeto"
             if (index == 0) {
               return Card(
                 elevation: 4,
                 color: Colors.blue.shade100,
-                child: InkWell( // Torna o card clicável com efeito visual
+                child: InkWell(
+                  // Torna o card clicável com efeito visual
                   onTap: () {
                     // Navega para a tela de Upload
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (context) => const UploadScreen()),
+                      MaterialPageRoute(
+                        builder: (context) => UploadScreen(
+                          usuarioNome: usuarioNome,
+                          usuarioId: usuarioId,
+                        ),
+                      ),
                     );
                   },
                   child: const Center(
@@ -51,7 +62,7 @@ class ProjetosScreen extends StatelessWidget {
             } else {
               // Os outros itens serão cards para os projetos existentes
               // index - 1 para ajustar ao índice da lista meusProjetos
-              final projeto = meusProjetos[index - 1]; 
+              final projeto = meusProjetos[index - 1];
               return Card(
                 elevation: 4,
                 color: projeto['cor'] as Color?,
@@ -63,7 +74,11 @@ class ProjetosScreen extends StatelessWidget {
                     children: [
                       Text(
                         projeto['nome'] as String,
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
                       ),
                     ],
                   ),

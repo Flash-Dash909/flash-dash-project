@@ -102,20 +102,23 @@ async def analisar_url(payload: UrlFontePayload):
 class DashboardPayload(BaseModel):
     titulo: str
     graficos_config: list
+    usuario_id: str | None = None
 
 # E crie a nova rota no final do arquivo:
 @app.post("/salvar-dashboard")
 async def salvar_dashboard_api(payload: DashboardPayload):
-    sucesso = save_dashboard(payload.titulo, payload.graficos_config)
+    # Passe o usuario_id para a função do banco
+    sucesso = save_dashboard(payload.titulo, payload.graficos_config, payload.usuario_id)
     if sucesso:
         return {"status": "success", "message": "Dashboard guardado na nuvem!"}
     else:
         return {"status": "error", "message": "Falha ao comunicar com o banco."}
-    
+
+# 2. Adicione usuario_id como parâmetro na rota de listar
 @app.get("/listar-dashboards")
-async def listar_dashboards_api():
-    dados = get_dashboards()
-    return dados # O FastAPI já transforma a lista em JSON automaticamente
+async def listar_dashboards_api(usuario_id: str | None = None): # <- O FastAPI transforma isso num Query Parameter automático
+    dados = get_dashboards(usuario_id)
+    return dados
 
 @app.delete("/dashboards/{dashboard_id}")
 async def excluir_dashboard_api(dashboard_id: str):
@@ -128,3 +131,4 @@ async def excluir_dashboard_api(dashboard_id: str):
 async def listar_logs_etl_api():
     dados = get_logs_etl()
     return dados
+

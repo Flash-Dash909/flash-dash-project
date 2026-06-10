@@ -66,4 +66,6 @@ class DashboardManager {
   static List<Map<String, String>> fontesSalvas = [];
   static Map<String, dynamic>? dadosFonteAtual;
   static String? dashboardAtualId;
+  static String? usuarioAtualId;
+  static String? usuarioAtualNome;
 }
