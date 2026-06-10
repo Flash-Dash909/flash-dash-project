@@ -15,6 +15,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _nameController = TextEditingController(); // Novo campo
   final TextEditingController _emailController = TextEditingController(); // Alterado para Email
   final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _confirmPasswordController = TextEditingController();
   
   bool _isLoading = false;
   bool _isLoginMode = true; 
@@ -24,6 +25,12 @@ class _LoginScreenState extends State<LoginScreen> {
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty || 
         (!_isLoginMode && _nameController.text.isEmpty)) {
       _mostrarSnackBar('Preencha todos os campos!', Colors.orange);
+      return;
+    }
+
+    // 2. === NOVA VALIDAÇÃO DE SENHA ===
+    if (!_isLoginMode && _passwordController.text != _confirmPasswordController.text) {
+      _mostrarSnackBar('As senhas não coincidem. Tente novamente.', Colors.orange);
       return;
     }
 
@@ -170,6 +177,19 @@ class _LoginScreenState extends State<LoginScreen> {
                   prefixIcon: Icon(Icons.lock_outline),
                 ),
               ),
+
+              if (!_isLoginMode) ...[
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _confirmPasswordController, // <- O novo controlador
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Confirmar Senha',
+                    prefixIcon: Icon(Icons.check_circle_outline),
+                  ),
+                ),
+              ],
+              
               const SizedBox(height: 32),
 
               SizedBox(
