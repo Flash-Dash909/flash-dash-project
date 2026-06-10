@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
+
 import '../../dashboard/dashboard_manager.dart';
 import '../../dashboard/screens/dashboard_canvas_screen.dart';
+import '../../dashboard/widgets/chart_renderer.dart';
 
 class MetricasScreen extends StatefulWidget {
   final Map<String, dynamic> data;
   final String tipoGrafico;
 
-  const MetricasScreen({super.key, required this.data, required this.tipoGrafico});
+  const MetricasScreen({
+    super.key,
+    required this.data,
+    required this.tipoGrafico,
+  });
 
   @override
   State<MetricasScreen> createState() => _MetricasScreenState();
@@ -15,472 +21,700 @@ class MetricasScreen extends StatefulWidget {
 class _MetricasScreenState extends State<MetricasScreen> {
   String? _dimensaoSelecionada;
   String? _metricaSelecionada;
+  String _agregacao = 'Soma';
+  int _limiteItens = 8;
+  bool _ordenarDesc = true;
 
-  // Variáveis de Estado Reais (Controlam a Pré-visualização e o Salvamento)
   String _tituloPersonalizado = "";
   bool _tituloEditadoManualmente = false;
   Color _corFundo = Colors.white;
+  Color _corTextoTitulo = const Color(0xFF0F172A);
   double _fontSizeTitulo = 14.0;
   String _alinhamentoTitulo = 'left';
-  Color _corTextoTitulo = const Color(0xFF0F172A);
   double _raioBorda = 12.0;
   bool _mostrarSombra = true;
   bool _mostrarEixos = true;
   bool _mostrarLegenda = true;
   String _posicaoLegenda = 'bottom';
-  bool _mostrarValores = true; 
+  bool _mostrarValores = true;
   bool _mostrarRotulos = true;
-  
-  double? _raioFuro; 
+  bool _mostrarPontos = true;
+  double _espessuraLinha = 3.0;
+  double _raioFuro = 0.0;
   bool _mostrarPorcentagem = false;
 
-  // Lógica de Agrupamento Dinâmico (Group By)
-  List<Map<String, dynamic>> _calcularDadosDinamicos(String dimensao, String metrica) {
-    List<dynamic> dadosBrutos = widget.data['dados_brutos'] ?? widget.data['dados_planilha']?['dados_brutos'] ?? [];
-    if (dadosBrutos.isEmpty) return List<Map<String, dynamic>>.from(widget.data['chart_data'] ?? widget.data['dados_planilha']?['chart_data'] ?? []);
+  List<dynamic> get _dadosBrutos =>
+      widget.data['dados_brutos'] ??
+      widget.data['dados_planilha']?['dados_brutos'] ??
+      [];
 
-    Map<String, double> agrupamento = {};
-    for (var linha in dadosBrutos) {
-      String chave = linha[dimensao]?.toString() ?? "Desconhecido";
-      double valor = 0.0;
-      if (linha[metrica] is num) valor = (linha[metrica] as num).toDouble();
-      else if (linha[metrica] is String) valor = double.tryParse(linha[metrica].toString()) ?? 0.0;
-      agrupamento[chave] = (agrupamento[chave] ?? 0.0) + valor;
-    }
+  Map<String, dynamic> get _summary => Map<String, dynamic>.from(
+    widget.data['summary'] ?? widget.data['dados_planilha']?['summary'] ?? {},
+  );
 
-    List<Map<String, dynamic>> novoChartData = [];
-    List<Color> paleta = [
-      const Color(0xFF2563EB), const Color(0xFF10B981), const Color(0xFFF59E0B),
-      const Color(0xFFEF4444), const Color(0xFF8B5CF6), const Color(0xFF14B8A6)
-    ];
-    int indexCor = 0;
-    agrupamento.forEach((key, value) {
-      novoChartData.add({"label": key, "value": value, "color": paleta[indexCor % paleta.length]});
-      indexCor++;
-    });
-    
-    novoChartData.sort((a, b) => b['value'].compareTo(a['value']));
-    return novoChartData.take(6).toList(); 
+  bool get _isPizzaOuRosca =>
+      widget.tipoGrafico.contains('Pizza') ||
+      widget.tipoGrafico.contains('Rosca');
+  bool get _isLinhaOuArea =>
+      widget.tipoGrafico.contains('Linha') ||
+      widget.tipoGrafico.contains('Área');
+
+  @override
+  void initState() {
+    super.initState();
+    _raioFuro = widget.tipoGrafico.contains('Rosca') ? 0.58 : 0.0;
   }
 
-  // Painel de Edição com Cópias Temporárias (Padrão Power BI)
+  List<Map<String, dynamic>> _calcularDadosDinamicos(
+    String dimensao,
+    String metrica,
+  ) {
+    final dadosBrutos = _dadosBrutos;
+    if (dadosBrutos.isEmpty) {
+      return List<Map<String, dynamic>>.from(
+        widget.data['chart_data'] ??
+            widget.data['dados_planilha']?['chart_data'] ??
+            [],
+      );
+    }
+
+    final agrupamento = <String, List<double>>{};
+    for (final linha in dadosBrutos) {
+      final chave = linha[dimensao]?.toString().trim().isNotEmpty == true
+          ? linha[dimensao].toString()
+          : "Desconhecido";
+      final raw = linha[metrica];
+      final valor = raw is num
+          ? raw.toDouble()
+          : double.tryParse(raw.toString().replaceAll(',', '.')) ?? 0.0;
+      agrupamento.putIfAbsent(chave, () => []).add(valor);
+    }
+
+    final paleta = [
+      const Color(0xFF2563EB),
+      const Color(0xFF10B981),
+      const Color(0xFFF59E0B),
+      const Color(0xFFEF4444),
+      const Color(0xFF8B5CF6),
+      const Color(0xFF14B8A6),
+      const Color(0xFFEC4899),
+      const Color(0xFF64748B),
+    ];
+
+    final dados = agrupamento.entries.map((entry) {
+      final valores = entry.value;
+      final soma = valores.fold<double>(0, (total, valor) => total + valor);
+      final valor = switch (_agregacao) {
+        'Média' => soma / valores.length,
+        'Contagem' => valores.length.toDouble(),
+        'Máximo' => valores.reduce((a, b) => a > b ? a : b),
+        'Mínimo' => valores.reduce((a, b) => a < b ? a : b),
+        _ => soma,
+      };
+      final index = agrupamento.keys.toList().indexOf(entry.key);
+      return {
+        "label": entry.key,
+        "value": valor,
+        "color": paleta[index % paleta.length],
+      };
+    }).toList();
+
+    dados.sort((a, b) {
+      final valorA = (a['value'] as num).toDouble();
+      final valorB = (b['value'] as num).toDouble();
+      return _ordenarDesc ? valorB.compareTo(valorA) : valorA.compareTo(valorB);
+    });
+    return dados.take(_limiteItens).toList();
+  }
+
+  ChartConfig _criarConfigPreview(String dim, String met) {
+    final titulo = _tituloPersonalizado.isEmpty
+        ? "$met por $dim"
+        : _tituloPersonalizado;
+    return ChartConfig(
+      id: 'preview',
+      tipo: widget.tipoGrafico,
+      titulo: titulo,
+      dimensao: dim,
+      metrica: met,
+      dados: _calcularDadosDinamicos(dim, met),
+      posicao: const Offset(50, 50),
+      corFundo: _corFundo,
+      fontSizeTitulo: _fontSizeTitulo,
+      alinhamentoTitulo: _alinhamentoTitulo,
+      corTextoTitulo: _corTextoTitulo,
+      raioBorda: _raioBorda,
+      mostrarSombra: _mostrarSombra,
+      mostrarEixos: _mostrarEixos,
+      mostrarLegenda: _mostrarLegenda,
+      posicaoLegenda: _posicaoLegenda,
+      mostrarValores: _mostrarValores,
+      mostrarRotulos: _mostrarRotulos,
+      configExtra: {
+        'agregacao': _agregacao,
+        'limiteItens': _limiteItens,
+        'ordenarDesc': _ordenarDesc,
+        'mostrarPontos': _mostrarPontos,
+        'espessuraLinha': _espessuraLinha,
+        'raioFuro': _raioFuro,
+        'mostrarPorcentagem': _mostrarPorcentagem,
+      },
+    );
+  }
+
   void _abrirPainelDeEdicao() {
-    TextEditingController tituloController = TextEditingController(text: _tituloPersonalizado);
-    
-    // Criamos cópias temporárias para o Modal manipular isoladamente
-    double tempFontSize = _fontSizeTitulo;
-    String tempAlinhamento = _alinhamentoTitulo;
-    Color tempCorTexto = _corTextoTitulo;
-    Color tempCorFundo = _corFundo;
-    double tempRaioBorda = _raioBorda;
-    bool tempMostrarSombra = _mostrarSombra;
-    bool tempMostrarEixos = _mostrarEixos;
-    bool tempMostrarLegenda = _mostrarLegenda;
-    String tempPosicaoLegenda = _posicaoLegenda;
-    double tempRaioFuro = _raioFuro ?? (widget.tipoGrafico.contains('Rosca') ? 0.6 : 0.0);
-    bool tempMostrarPorc = _mostrarPorcentagem;
-    bool tempMostrarValores = _mostrarValores;
-    bool tempMostrarRotulos = _mostrarRotulos;
+    final tituloController = TextEditingController(text: _tituloPersonalizado);
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-            bool isPizzaOuRosca = widget.tipoGrafico.contains('Pizza') || widget.tipoGrafico.contains('Rosca');
-
-            return Container(
-              height: MediaQuery.of(context).size.height * 0.85,
-              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 24, right: 24, top: 24),
+            return SizedBox(
+              height: MediaQuery.of(context).size.height * 0.88,
               child: Column(
                 children: [
-                  const Text("Formatar Visual", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF2563EB))),
-                  const Divider(),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 20, 16, 8),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.tune_rounded,
+                          color: Color(0xFF2563EB),
+                        ),
+                        const SizedBox(width: 12),
+                        const Text(
+                          "Formatar visual",
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
                   Expanded(
                     child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(24),
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // --- 1. CABEÇALHO ---
-                          const SizedBox(height: 8),
-                          const Text("1. Cabeçalho do Gráfico", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.blueGrey)),
-                          const SizedBox(height: 12),
-                          TextField(
-                            controller: tituloController,
-                            decoration: const InputDecoration(labelText: "Texto do Título", border: OutlineInputBorder()),
-                            onChanged: (val) => setModalState(() { _tituloPersonalizado = val; _tituloEditadoManualmente = true; }),
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            children: [
-                              const Text("Alinhamento: "),
-                              ToggleButtons(
-                                borderRadius: BorderRadius.circular(8),
-                                constraints: const BoxConstraints(minHeight: 36, minWidth: 40),
-                                isSelected: [tempAlinhamento == 'left', tempAlinhamento == 'center', tempAlinhamento == 'right'],
-                                onPressed: (index) => setModalState(() => tempAlinhamento = ['left', 'center', 'right'][index]),
-                                children: const [Icon(Icons.format_align_left), Icon(Icons.format_align_center), Icon(Icons.format_align_right)],
+                          _secao("Dados", [
+                            _dropdown(
+                              "Agregação",
+                              _agregacao,
+                              ['Soma', 'Média', 'Contagem', 'Máximo', 'Mínimo'],
+                              (v) => setModalState(() => _agregacao = v),
+                            ),
+                            _slider(
+                              "Quantidade de categorias",
+                              _limiteItens.toDouble(),
+                              3,
+                              20,
+                              (v) =>
+                                  setModalState(() => _limiteItens = v.round()),
+                            ),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text(
+                                "Ordenar do maior para o menor",
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            children: [
-                              Text("Tamanho Fonte (${tempFontSize.round()}): "),
-                              Expanded(
-                                child: Slider(value: tempFontSize, min: 10, max: 24, divisions: 14,
-                                  onChanged: (val) => setModalState(() => tempFontSize = val)),
+                              value: _ordenarDesc,
+                              onChanged: (v) =>
+                                  setModalState(() => _ordenarDesc = v),
+                            ),
+                          ]),
+                          _secao("Título", [
+                            TextField(
+                              controller: tituloController,
+                              decoration: const InputDecoration(
+                                labelText: "Texto do título",
+                                prefixIcon: Icon(Icons.title_rounded),
                               ),
-                            ],
-                          ),
-                          Row(
-                            children: [
-                              const Text("Cor do Texto: "),
-                              _buildBolinha(const Color(0xFF0F172A), tempCorTexto, (c) => tempCorTexto = c, setModalState),
-                              _buildBolinha(const Color(0xFF2563EB), tempCorTexto, (c) => tempCorTexto = c, setModalState),
-                              _buildBolinha(const Color(0xFFEF4444), tempCorTexto, (c) => tempCorTexto = c, setModalState),
-                            ],
-                          ),
-                          const Divider(height: 32),
-
-                          // --- 2. CARTÃO E EFEITOS ---
-                          const Text("2. Cartão e Efeitos Visuais", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.blueGrey)),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              const Text("Cor de Fundo: "),
-                              _buildBolinha(Colors.white, tempCorFundo, (c) => tempCorFundo = c, setModalState),
-                              _buildBolinha(const Color(0xFFF1F5F9), tempCorFundo, (c) => tempCorFundo = c, setModalState),
-                              _buildBolinha(const Color(0xFFEFF6FF), tempCorFundo, (c) => tempCorFundo = c, setModalState),
-                              _buildBolinha(const Color(0xFFFFFBEB), tempCorFundo, (c) => tempCorFundo = c, setModalState),
-                              _buildBolinha(const Color(0xFF1E293B), tempCorFundo, (c) => tempCorFundo = c, setModalState),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            children: [
-                              Text("Bordas Arredondadas (${tempRaioBorda.round()}): "),
-                              Expanded(
-                                child: Slider(value: tempRaioBorda, min: 0, max: 32, divisions: 8,
-                                  onChanged: (val) => setModalState(() => tempRaioBorda = val)),
-                              ),
-                            ],
-                          ),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text("Sombra do Cartão"),
-                              Switch(value: tempMostrarSombra, activeColor: const Color(0xFF2563EB), onChanged: (val) => setModalState(() => tempMostrarSombra = val)),
-                            ],
-                          ),
-                          const Divider(height: 32),
-
-                          // --- 3. EIXOS E LEGENDA ---
-                          const Text("3. Rótulos e Legenda", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.blueGrey)),
-                          
-                          // NOVOS CONTROLES DE VALORES E RÓTULOS:
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text("Mostrar Números (Valores)"),
-                              Switch(value: tempMostrarValores, activeColor: const Color(0xFF2563EB), onChanged: (val) => setModalState(() => tempMostrarValores = val)),
-                            ],
-                          ),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text("Mostrar Nomes (Categorias)"),
-                              Switch(value: tempMostrarRotulos, activeColor: const Color(0xFF2563EB), onChanged: (val) => setModalState(() => tempMostrarRotulos = val)),
-                            ],
-                          ),
-
-                          if (!isPizzaOuRosca)
-
-                          const Text("3. Eixos e Legenda", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.blueGrey)),
-                          if (!isPizzaOuRosca)
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text("Mostrar Eixos (X e Y)"),
-                                Switch(value: tempMostrarEixos, activeColor: const Color(0xFF2563EB), onChanged: (val) => setModalState(() => tempMostrarEixos = val)),
+                              onChanged: (v) => setModalState(() {
+                                _tituloPersonalizado = v;
+                                _tituloEditadoManualmente = true;
+                              }),
+                            ),
+                            _slider(
+                              "Tamanho do título",
+                              _fontSizeTitulo,
+                              10,
+                              28,
+                              (v) => setModalState(() => _fontSizeTitulo = v),
+                            ),
+                            _segmented(
+                              "Alinhamento",
+                              _alinhamentoTitulo,
+                              const {
+                                'left': Icons.format_align_left,
+                                'center': Icons.format_align_center,
+                                'right': Icons.format_align_right,
+                              },
+                              (v) =>
+                                  setModalState(() => _alinhamentoTitulo = v),
+                            ),
+                            _cores(
+                              "Cor do título",
+                              _corTextoTitulo,
+                              [
+                                const Color(0xFF0F172A),
+                                const Color(0xFF2563EB),
+                                const Color(0xFFEF4444),
+                                Colors.white,
                               ],
+                              (c) => setModalState(() => _corTextoTitulo = c),
                             ),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text("Mostrar Legenda"),
-                              Switch(value: tempMostrarLegenda, activeColor: const Color(0xFF2563EB), onChanged: (val) => setModalState(() => tempMostrarLegenda = val)),
-                            ],
-                          ),
-                          if (tempMostrarLegenda)
-                            Wrap(
-                              spacing: 8,
-                              children: ['top', 'bottom', 'left', 'right'].map((pos) {
-                                return ChoiceChip(
-                                  label: Text(pos.toUpperCase()), 
-                                  selected: tempPosicaoLegenda == pos, 
-                                  onSelected: (val) => setModalState(() => tempPosicaoLegenda = pos)
-                                );
-                              }).toList(),
+                          ]),
+                          _secao("Cartão", [
+                            _cores(
+                              "Fundo",
+                              _corFundo,
+                              [
+                                Colors.white,
+                                const Color(0xFFF8FAFC),
+                                const Color(0xFFEFF6FF),
+                                const Color(0xFFFFFBEB),
+                                const Color(0xFF1E293B),
+                              ],
+                              (c) => setModalState(() => _corFundo = c),
                             ),
-                          const Divider(height: 32),
-
-                          // --- 4. ESPECÍFICO (PIZZA) ---
-                          if (isPizzaOuRosca) ...[
-                            const Text("4. Configurações da Pizza/Rosca", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.blueGrey)),
-                            const SizedBox(height: 16),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text("Formato dos Dados"),
-                                ToggleButtons(
-                                  borderRadius: BorderRadius.circular(8),
-                                  isSelected: [!tempMostrarPorc, tempMostrarPorc],
-                                  onPressed: (index) => setModalState(() => tempMostrarPorc = index == 1),
-                                  children: const [Padding(padding: EdgeInsets.symmetric(horizontal: 12), child: Text("123")), Padding(padding: EdgeInsets.symmetric(horizontal: 12), child: Text("%"))],
+                            _slider(
+                              "Raio da borda",
+                              _raioBorda,
+                              0,
+                              32,
+                              (v) => setModalState(() => _raioBorda = v),
+                            ),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text("Sombra"),
+                              value: _mostrarSombra,
+                              onChanged: (v) =>
+                                  setModalState(() => _mostrarSombra = v),
+                            ),
+                          ]),
+                          _secao("Eixos, rótulos e legenda", [
+                            if (!_isPizzaOuRosca)
+                              SwitchListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text("Mostrar eixos e grade"),
+                                value: _mostrarEixos,
+                                onChanged: (v) =>
+                                    setModalState(() => _mostrarEixos = v),
+                              ),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text("Mostrar valores"),
+                              value: _mostrarValores,
+                              onChanged: (v) =>
+                                  setModalState(() => _mostrarValores = v),
+                            ),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text("Mostrar rótulos"),
+                              value: _mostrarRotulos,
+                              onChanged: (v) =>
+                                  setModalState(() => _mostrarRotulos = v),
+                            ),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text("Mostrar legenda"),
+                              value: _mostrarLegenda,
+                              onChanged: (v) =>
+                                  setModalState(() => _mostrarLegenda = v),
+                            ),
+                            if (_mostrarLegenda)
+                              _dropdown(
+                                "Posição da legenda",
+                                _posicaoLegenda,
+                                ['top', 'bottom', 'left', 'right'],
+                                (v) => setModalState(() => _posicaoLegenda = v),
+                              ),
+                          ]),
+                          if (_isLinhaOuArea)
+                            _secao("Linha e área", [
+                              _slider(
+                                "Espessura da linha",
+                                _espessuraLinha,
+                                1,
+                                8,
+                                (v) => setModalState(() => _espessuraLinha = v),
+                              ),
+                              SwitchListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text("Mostrar marcadores"),
+                                value: _mostrarPontos,
+                                onChanged: (v) =>
+                                    setModalState(() => _mostrarPontos = v),
+                              ),
+                            ]),
+                          if (_isPizzaOuRosca)
+                            _secao("Pizza e rosca", [
+                              SwitchListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text(
+                                  "Exibir valores em porcentagem",
                                 ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            const Text("Abertura Central (Rosca)"),
-                            Slider(value: tempRaioFuro, min: 0.0, max: 0.8, activeColor: const Color(0xFF10B981), onChanged: (val) => setModalState(() => tempRaioFuro = val)),
-                          ],
-                          const SizedBox(height: 24),
+                                value: _mostrarPorcentagem,
+                                onChanged: (v) => setModalState(
+                                  () => _mostrarPorcentagem = v,
+                                ),
+                              ),
+                              _slider(
+                                "Abertura central",
+                                _raioFuro,
+                                0,
+                                0.82,
+                                (v) => setModalState(() => _raioFuro = v),
+                              ),
+                            ]),
                         ],
                       ),
                     ),
                   ),
-                  
-                  // BOTÃO APLICAR: DEVOLVE AS ALTERAÇÕES À TELA PRINCIPAL
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB), padding: const EdgeInsets.symmetric(vertical: 16)),
-                      onPressed: () {
-                        setState(() {
-                          _fontSizeTitulo = tempFontSize;
-                          _alinhamentoTitulo = tempAlinhamento;
-                          _corTextoTitulo = tempCorTexto;
-                          _corFundo = tempCorFundo;
-                          _raioBorda = tempRaioBorda;
-                          _mostrarSombra = tempMostrarSombra;
-                          _mostrarEixos = tempMostrarEixos;
-                          _mostrarLegenda = tempMostrarLegenda;
-                          _posicaoLegenda = tempPosicaoLegenda;
-                          _raioFuro = tempRaioFuro;
-                          _mostrarPorcentagem = tempMostrarPorc;
-                          _mostrarValores = tempMostrarValores;
-                          _mostrarRotulos = tempMostrarRotulos;
-                        }); 
-                        Navigator.pop(context);
-                      },
-                      child: const Text("Aplicar Configurações", style: TextStyle(fontSize: 16, color: Colors.white)),
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          setState(() {});
+                          Navigator.pop(context);
+                        },
+                        child: const Text("Aplicar configurações"),
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 16),
                 ],
               ),
             );
-          }
+          },
         );
-      }
+      },
+    ).whenComplete(() => tituloController.dispose());
+  }
+
+  Widget _secao(String titulo, List<Widget> children) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            titulo,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF0F172A),
+            ),
+          ),
+          const SizedBox(height: 12),
+          ...children.map(
+            (child) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: child,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildBolinha(Color cor, Color ativa, Function(Color) updateTarget, StateSetter setModalState) {
-    return GestureDetector(
-      onTap: () => setModalState(() => updateTarget(cor)),
-      child: Container(
-        margin: const EdgeInsets.only(right: 8, left: 8),
-        width: 28, height: 28,
-        decoration: BoxDecoration(
-          color: cor, 
-          shape: BoxShape.circle, 
-          border: Border.all(color: ativa == cor ? const Color(0xFF2563EB) : Colors.grey.shade300, width: ativa == cor ? 3 : 1)
+  Widget _dropdown(
+    String label,
+    String value,
+    List<String> options,
+    ValueChanged<String> onChanged,
+  ) {
+    return DropdownButtonFormField<String>(
+      value: value,
+      decoration: InputDecoration(labelText: label),
+      items: options
+          .map((o) => DropdownMenuItem(value: o, child: Text(o)))
+          .toList(),
+      onChanged: (v) {
+        if (v != null) onChanged(v);
+      },
+    );
+  }
+
+  Widget _slider(
+    String label,
+    double value,
+    double min,
+    double max,
+    ValueChanged<double> onChanged,
+  ) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 170,
+          child: Text("$label: ${value.toStringAsFixed(max <= 1 ? 2 : 0)}"),
         ),
-      ),
+        Expanded(
+          child: Slider(value: value, min: min, max: max, onChanged: onChanged),
+        ),
+      ],
+    );
+  }
+
+  Widget _segmented(
+    String label,
+    String value,
+    Map<String, IconData> options,
+    ValueChanged<String> onChanged,
+  ) {
+    return Row(
+      children: [
+        SizedBox(width: 120, child: Text(label)),
+        ToggleButtons(
+          borderRadius: BorderRadius.circular(8),
+          isSelected: options.keys.map((key) => key == value).toList(),
+          onPressed: (index) => onChanged(options.keys.elementAt(index)),
+          children: options.values
+              .map(
+                (icon) => Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Icon(icon),
+                ),
+              )
+              .toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _cores(
+    String label,
+    Color ativa,
+    List<Color> cores,
+    ValueChanged<Color> onChanged,
+  ) {
+    return Row(
+      children: [
+        SizedBox(width: 120, child: Text(label)),
+        Wrap(
+          spacing: 10,
+          children: cores.map((cor) {
+            return InkWell(
+              borderRadius: BorderRadius.circular(18),
+              onTap: () => onChanged(cor),
+              child: Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: cor,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: ativa == cor
+                        ? const Color(0xFF2563EB)
+                        : const Color(0xFFCBD5E1),
+                    width: ativa == cor ? 3 : 1,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    List<dynamic> dimensoes = widget.data['summary']?['dimensoes'] ?? widget.data['dados_planilha']?['summary']?['dimensoes'] ?? [];
-    List<dynamic> metricas = widget.data['summary']?['metricas'] ?? widget.data['dados_planilha']?['summary']?['metricas'] ?? [];
+    final dimensoes = List<dynamic>.from(_summary['dimensoes'] ?? []);
+    final metricas = List<dynamic>.from(_summary['metricas'] ?? []);
 
-    String dim = _dimensaoSelecionada ?? (dimensoes.isNotEmpty ? dimensoes[0].toString() : "Categoria");
-    String met = _metricaSelecionada ?? (metricas.isNotEmpty ? metricas[0].toString() : "Valor");
-    
+    final dim =
+        _dimensaoSelecionada ??
+        (dimensoes.isNotEmpty ? dimensoes[0].toString() : "Categoria");
+    final met =
+        _metricaSelecionada ??
+        (metricas.isNotEmpty ? metricas[0].toString() : "Valor");
+
     if (!_tituloEditadoManualmente) {
       _tituloPersonalizado = "$met por $dim";
     }
 
-    List<Map<String, dynamic>> dadosPreview = _calcularDadosDinamicos(dim, met);
-    bool isDesktop = MediaQuery.of(context).size.width >= 800;
-
-    TextAlign alignPreview = _alinhamentoTitulo == 'center' 
-        ? TextAlign.center 
+    final configPreview = _criarConfigPreview(dim, met);
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
+    final alignPreview = _alinhamentoTitulo == 'center'
+        ? TextAlign.center
         : (_alinhamentoTitulo == 'right' ? TextAlign.right : TextAlign.left);
 
     return Scaffold(
       appBar: AppBar(title: Text('Criar ${widget.tipoGrafico}')),
       backgroundColor: const Color(0xFFF8FAFC),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Flex(
-            direction: isDesktop ? Axis.horizontal : Axis.vertical,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // PAINEL DA ESQUERDA: DROP DOWNS
-              Container(
-                width: isDesktop ? 400 : double.infinity,
-                padding: const EdgeInsets.all(32),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFE2E8F0))),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Icon(Icons.tune_rounded, size: 40, color: Color(0xFF2563EB)),
-                    const SizedBox(height: 16),
-                    const Text("Dados do Gráfico", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 24),
-                    const Text("Eixo X (Dimensão)", style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      value: dimensoes.contains(dim) ? dim : null,
-                      items: dimensoes.map((d) => DropdownMenuItem(value: d.toString(), child: Text(d.toString()))).toList(),
-                      onChanged: (val) => setState(() => _dimensaoSelecionada = val),
-                    ),
-                    const SizedBox(height: 24),
-                    const Text("Eixo Y (Métrica)", style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      value: metricas.contains(met) ? met : null,
-                      items: metricas.map((m) => DropdownMenuItem(value: m.toString(), child: Text(m.toString()))).toList(),
-                      onChanged: (val) => setState(() => _metricaSelecionada = val),
-                    ),
-                  ],
-                ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Flex(
+          direction: isDesktop ? Axis.horizontal : Axis.vertical,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: isDesktop ? 390 : double.infinity,
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
-
-              if (isDesktop) const SizedBox(width: 32) else const SizedBox(height: 24),
-
-              // PAINEL DA DIREITA: LIVE PREVIEW TOTALMENTE DINÂMICO
-              Container(
-                width: isDesktop ? 500 : double.infinity,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Icon(
+                    Icons.tune_rounded,
+                    size: 40,
+                    color: Color(0xFF2563EB),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    "Dados do gráfico",
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 24),
+                  DropdownButtonFormField<String>(
+                    value: dimensoes.contains(dim) ? dim : null,
+                    decoration: const InputDecoration(labelText: "Dimensão"),
+                    items: dimensoes
+                        .map(
+                          (d) => DropdownMenuItem(
+                            value: d.toString(),
+                            child: Text(d.toString()),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (val) =>
+                        setState(() => _dimensaoSelecionada = val),
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: metricas.contains(met) ? met : null,
+                    decoration: const InputDecoration(labelText: "Métrica"),
+                    items: metricas
+                        .map(
+                          (m) => DropdownMenuItem(
+                            value: m.toString(),
+                            child: Text(m.toString()),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (val) =>
+                        setState(() => _metricaSelecionada = val),
+                  ),
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    onPressed: _abrirPainelDeEdicao,
+                    icon: const Icon(Icons.brush_rounded),
+                    label: const Text("Personalizar visual"),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(width: isDesktop ? 32 : 0, height: isDesktop ? 0 : 24),
+            Expanded(
+              flex: isDesktop ? 1 : 0,
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 460),
                 decoration: BoxDecoration(
-                  color: _corFundo, // Fundo dinâmico
-                  borderRadius: BorderRadius.circular(_raioBorda), // Bordas dinâmicas
+                  color: _corFundo,
+                  borderRadius: BorderRadius.circular(_raioBorda),
                   border: Border.all(color: const Color(0xFFE2E8F0)),
-                  boxShadow: _mostrarSombra 
-                      ? const [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4))] 
-                      : [], // Sombra dinâmica
+                  boxShadow: _mostrarSombra
+                      ? const [
+                          BoxShadow(
+                            color: Colors.black12,
+                            blurRadius: 10,
+                            offset: Offset(0, 4),
+                          ),
+                        ]
+                      : [],
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Padding(
-                      padding: const EdgeInsets.all(16.0),
+                      padding: const EdgeInsets.all(16),
                       child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Expanded(
                             child: Text(
-                              _tituloPersonalizado, 
-                              textAlign: alignPreview, // Alinhamento dinâmico
+                              configPreview.titulo,
+                              textAlign: alignPreview,
                               style: TextStyle(
-                                fontWeight: FontWeight.bold, 
-                                fontSize: _fontSizeTitulo, // Fonte dinâmica
-                                color: _corTextoTitulo // Cor de texto dinâmica
-                              ), 
-                              overflow: TextOverflow.ellipsis
-                            )
+                                fontWeight: FontWeight.bold,
+                                fontSize: _fontSizeTitulo,
+                                color: _corTextoTitulo,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                           TextButton.icon(
                             onPressed: _abrirPainelDeEdicao,
                             icon: const Icon(Icons.brush, size: 16),
-                            label: const Text("Editar Visual"),
-                            style: TextButton.styleFrom(foregroundColor: const Color(0xFF2563EB)),
-                          )
+                            label: const Text("Editar"),
+                          ),
                         ],
                       ),
                     ),
                     const Divider(height: 1),
-                    
-                    Container(
-                      height: 300,
-                      padding: const EdgeInsets.all(16),
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.remove_red_eye_outlined, color: _corTextoTitulo.withOpacity(0.5), size: 48),
-                            const SizedBox(height: 16),
-                            Text(
-                              "Pré-visualização Ativa\nO cartão acima já reflete o design final.", 
-                              textAlign: TextAlign.center, 
-                              style: TextStyle(color: _corTextoTitulo.withOpacity(0.6))
-                            ),
-                          ],
-                        ),
+                    SizedBox(
+                      height: 310,
+                      child: Padding(
+                        padding: const EdgeInsets.all(18),
+                        child: ChartRenderer(config: configPreview),
                       ),
                     ),
-                    
                     const Divider(height: 1),
                     Padding(
-                      padding: const EdgeInsets.all(16.0),
+                      padding: const EdgeInsets.all(16),
                       child: ElevatedButton.icon(
                         onPressed: () {
                           DashboardManager.graficosAtivos.add(
-                            ChartConfig(
-                              id: DateTime.now().millisecondsSinceEpoch.toString(), 
-                              tipo: widget.tipoGrafico,
-                              titulo: _tituloPersonalizado,
-                              dimensao: dim,
-                              metrica: met,
-                              dados: dadosPreview,
-                              posicao: const Offset(50, 50),
-                              
-                              // PASSANDO AS CONFIGURAÇÕES REAIS PARA O CANVAS
-                              corFundo: _corFundo,
-                              fontSizeTitulo: _fontSizeTitulo,
-                              alinhamentoTitulo: _alinhamentoTitulo,
-                              corTextoTitulo: _corTextoTitulo,
-                              raioBorda: _raioBorda,
-                              mostrarSombra: _mostrarSombra,
-                              mostrarEixos: _mostrarEixos,
-                              mostrarLegenda: _mostrarLegenda,
-                              posicaoLegenda: _posicaoLegenda,
-                              mostrarValores: _mostrarValores,
-                              mostrarRotulos: _mostrarRotulos,
-                              
-                              
-                              configExtra: {
-                                'raioFuro': _raioFuro ?? (widget.tipoGrafico.contains('Rosca') ? 0.6 : 0.0),
-                                'mostrarPorcentagem': _mostrarPorcentagem,
-                                'espessuraFatia': 1.0,
-                              }
-                            )
+                            configPreview
+                              ..id = DateTime.now().millisecondsSinceEpoch
+                                  .toString(),
                           );
-                          Navigator.push(context, MaterialPageRoute(builder: (context) => const DashboardCanvasScreen()));
+                          DashboardManager.dadosFonteAtual = widget.data;
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  const DashboardCanvasScreen(),
+                            ),
+                          );
                         },
                         icon: const Icon(Icons.check),
-                        label: const Text("Adicionar ao Dashboard", style: TextStyle(fontSize: 16)),
+                        label: const Text(
+                          "Adicionar ao Dashboard",
+                          style: TextStyle(fontSize: 16),
+                        ),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF2563EB),
-                          foregroundColor: Colors.white,
-                          minimumSize: const Size(double.infinity, 50)
+                          minimumSize: const Size(double.infinity, 50),
                         ),
                       ),
                     ),
                   ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

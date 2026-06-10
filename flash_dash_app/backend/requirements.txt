@@ -9,6 +9,8 @@ python-dotenv>=1.0.1
 # --- Motor de Processamento de Dados (BI) ---
 pandas
 numpy
+openpyxl>=3.1.0
+pyarrow>=15.0.0
 
 # --- Testes e Qualidade (QA) ---
 pytest>=8.1.1

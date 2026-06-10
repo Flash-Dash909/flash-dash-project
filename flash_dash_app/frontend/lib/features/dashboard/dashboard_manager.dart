@@ -9,7 +9,7 @@ class ChartConfig {
   List<Map<String, dynamic>> dados;
   Offset posicao;
   Size tamanho;
-  
+
   // --- NOVAS CONFIGURAÇÕES GERAIS (Estilo Power BI) ---
   Color corFundo;
   double fontSizeTitulo;
@@ -19,7 +19,7 @@ class ChartConfig {
   bool mostrarSombra;
   bool mostrarEixos; // Para esconder Eixo X e Y (deixar mais clean)
   bool mostrarLegenda;
-  String posicaoLegenda; 
+  String posicaoLegenda;
   bool mostrarValores;
   bool mostrarRotulos;
 
@@ -46,7 +46,7 @@ class ChartConfig {
     this.posicaoLegenda = 'bottom',
     this.mostrarValores = true,
     this.mostrarRotulos = true,
-    Map<String, dynamic>? configExtra, 
+    Map<String, dynamic>? configExtra,
   }) : configExtra = configExtra ?? {} {
     if (this.configExtra.isEmpty) {
       if (tipo.contains('Pizza') || tipo.contains('Rosca')) {
@@ -61,7 +61,9 @@ class ChartConfig {
 }
 
 class DashboardManager {
-  static List<ChartConfig> graficosAtivos = []; 
+  static List<ChartConfig> graficosAtivos = [];
   static List<Map<String, dynamic>> dashboardsSalvos = [];
   static List<Map<String, String>> fontesSalvas = [];
+  static Map<String, dynamic>? dadosFonteAtual;
+  static String? dashboardAtualId;
 }

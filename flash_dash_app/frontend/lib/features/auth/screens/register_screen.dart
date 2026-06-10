@@ -4,16 +4,16 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 import '../../home/screens/home_screen.dart';
-import 'register_screen.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+class RegisterScreen extends StatefulWidget {
+  const RegisterScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _RegisterScreenState extends State<RegisterScreen> {
+  final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
@@ -28,23 +28,25 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
+    _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  Future<void> _fazerLogin() async {
+  Future<void> _cadastrarUsuario() async {
     setState(() {
       _isLoading = true;
     });
 
-    final url = Uri.parse('$_baseUrl/auth/login');
+    final url = Uri.parse('$_baseUrl/auth/cadastro');
 
     try {
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
+          'nome': _nameController.text.trim(),
           'email': _emailController.text.trim(),
           'senha': _passwordController.text,
         }),
@@ -61,7 +63,7 @@ class _LoginScreenState extends State<LoginScreen> {
           );
         }
       } else {
-        var mensagem = 'E-mail ou senha incorretos.';
+        var mensagem = 'Nao foi possivel criar sua conta.';
         try {
           final data = json.decode(response.body);
           mensagem = data['detail'] ?? mensagem;
@@ -98,6 +100,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
+      appBar: AppBar(title: const Text('Criar conta')),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
@@ -105,10 +108,14 @@ class _LoginScreenState extends State<LoginScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Icon(Icons.insights, size: 80, color: Color(0xFF2563EB)),
+              const Icon(
+                Icons.person_add_alt_1_outlined,
+                size: 72,
+                color: Color(0xFF2563EB),
+              ),
               const SizedBox(height: 16),
               const Text(
-                'Flash Dash',
+                'Cadastro',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 28,
@@ -118,11 +125,20 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Faca login para acessar seus dashboards',
+                'Crie seu acesso ao Flash Dash',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 16, color: Color(0xFF64748B)),
               ),
-              const SizedBox(height: 48),
+              const SizedBox(height: 40),
+              TextField(
+                controller: _nameController,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  labelText: 'Nome',
+                  prefixIcon: Icon(Icons.person_outline),
+                ),
+              ),
+              const SizedBox(height: 16),
               TextField(
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
@@ -145,25 +161,16 @@ class _LoginScreenState extends State<LoginScreen> {
               SizedBox(
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: _isLoading ? null : _fazerLogin,
+                  onPressed: _isLoading ? null : _cadastrarUsuario,
                   child: _isLoading
                       ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text('ENTRAR'),
+                      : const Text('CADASTRAR'),
                 ),
               ),
               const SizedBox(height: 16),
               TextButton(
-                onPressed: _isLoading
-                    ? null
-                    : () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const RegisterScreen(),
-                          ),
-                        );
-                      },
-                child: const Text('Criar nova conta'),
+                onPressed: _isLoading ? null : () => Navigator.pop(context),
+                child: const Text('Ja tenho uma conta'),
               ),
             ],
           ),
