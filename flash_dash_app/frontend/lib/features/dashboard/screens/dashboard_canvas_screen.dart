@@ -8,9 +8,10 @@ import '../../home/screens/home_screen.dart';
 
 class DashboardCanvasScreen extends StatefulWidget {
   final String usuarioNome; // <- ADICIONE ESSA VARIÁVEL
+  final String usuarioId; // <- ADICIONE ESSA VARIÁVEL
 
   // Atualize o construtor para receber o nome
-  const DashboardCanvasScreen({super.key, required this.usuarioNome}); 
+  const DashboardCanvasScreen({super.key, required this.usuarioNome, required this.usuarioId}); 
 
   @override
   State<DashboardCanvasScreen> createState() => _DashboardCanvasScreenState();
@@ -137,13 +138,19 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                     var response = await http.post(
                       Uri.parse('http://127.0.0.1:8000/salvar-dashboard'),
                       headers: {"Content-Type": "application/json"},
-                      body: json.encode({"titulo": nomeController.text, "graficos_config": configJson}),
+                      body: json.encode({"titulo": nomeController.text, "graficos_config": configJson, "usuario_id": widget.usuarioId}),
                     );
 
                     if (response.statusCode == 200) {
                       DashboardManager.graficosAtivos.clear();
                       Navigator.pop(dialogContext); 
-                      Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => HomeScreen(usuarioNome: widget.usuarioNome)), (route) => false);
+                      Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => HomeScreen(usuarioNome: widget.usuarioNome, usuarioId: widget.usuarioId)), (route) => false);
+                    } else {
+                      // ISSO VAI MOSTRAR O MOTIVO EXATO DO ERRO 422 NO CONSOLE:
+                      debugPrint("ERRO DO FASTAPI: ${response.body}");
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Falha ao salvar. Erro: ${response.statusCode}")));
+                      }
                     }
                   } catch (e) {
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro ao salvar: $e")));

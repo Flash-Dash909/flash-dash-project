@@ -6,7 +6,8 @@ class SelecaoGraficoScreen extends StatelessWidget {
   
   final Map<String, dynamic> data;
   final String usuarioNome; // <- ADICIONE AQUI
-  const SelecaoGraficoScreen({super.key, required this.data, required this.usuarioNome});
+  final String usuarioId; // <- ADICIONE AQUI
+  const SelecaoGraficoScreen({super.key, required this.data, required this.usuarioNome, required this.usuarioId});
 
   @override
   Widget build(BuildContext context) {
@@ -92,7 +93,7 @@ class SelecaoGraficoScreen extends StatelessWidget {
                   child: InkWell(
                     borderRadius: BorderRadius.circular(16),
                     onTap: funciona 
-                      ? () => Navigator.push(context, MaterialPageRoute(builder: (context) => MetricasScreen(data: data, tipoGrafico: grafico['nome'], usuarioNome: usuarioNome,)))
+                      ? () => Navigator.push(context, MaterialPageRoute(builder: (context) => MetricasScreen(data: data, tipoGrafico: grafico['nome'], usuarioNome: usuarioNome, usuarioId: usuarioId)))
                       : mostrarEmBreve,
                     child: Stack(
                       children: [

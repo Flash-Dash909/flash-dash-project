@@ -8,9 +8,10 @@ import '../../auth/screens/login_screen.dart'; // Ajuste a pasta se necessário
 
 class HomeScreen extends StatefulWidget {
   final String usuarioNome; // <- Cria a variável que vai receber o nome
+  final String usuarioId;
 
   // Atualiza o construtor para exigir o nome
-  const HomeScreen({super.key, required this.usuarioNome}); 
+  const HomeScreen({super.key, required this.usuarioNome, required this.usuarioId}); 
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -24,9 +25,11 @@ class _HomeScreenState extends State<HomeScreen> {
   // ==========================================
   Future<List<dynamic>> _buscarDashboards() async {
     try {
-      var response = await http.get(Uri.parse('http://127.0.0.1:8000/listar-dashboards'));
+      var response = await http.get(Uri.parse('http://127.0.0.1:8000/listar-dashboards?usuario_id=${widget.usuarioId}'));
       if (response.statusCode == 200) {
         return json.decode(utf8.decode(response.bodyBytes));
+      }else {
+        debugPrint("Erro do servidor ao buscar dashboards: ${response.statusCode}");
       }
     } catch (e) {
       debugPrint("Erro ao buscar dashboards: $e");
@@ -37,7 +40,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // BUSCA OS LOGS DO BACKEND
   Future<List<dynamic>> _buscarLogsETL() async {
     try {
-      var response = await http.get(Uri.parse('http://127.0.0.1:8000/listar-logs-etl'));
+      var response = await http.get(Uri.parse('http://127.0.0.1:8000/listar-dashboards?usuario_id=${widget.usuarioId}'));
       if (response.statusCode == 200) {
         return json.decode(utf8.decode(response.bodyBytes));
       }
@@ -51,7 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
     DashboardManager.graficosAtivos.clear();
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => UploadScreen(usuarioNome: widget.usuarioNome)),
+      MaterialPageRoute(builder: (context) => UploadScreen(usuarioNome: widget.usuarioNome, usuarioId: widget.usuarioId)),
     );
   }
 
@@ -424,7 +427,7 @@ class _HomeScreenState extends State<HomeScreen> {
           }
 
           // 3. Abre a tela do Dashboard já com os gráficos renderizados!
-          Navigator.push(context, MaterialPageRoute(builder: (context) => DashboardCanvasScreen(usuarioNome: widget.usuarioNome)));
+          Navigator.push(context, MaterialPageRoute(builder: (context) => DashboardCanvasScreen(usuarioNome: widget.usuarioNome, usuarioId: widget.usuarioId)));
         },
         child: Padding(
           padding: const EdgeInsets.all(20.0),

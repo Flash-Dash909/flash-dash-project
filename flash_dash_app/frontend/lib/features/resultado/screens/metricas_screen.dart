@@ -6,8 +6,9 @@ class MetricasScreen extends StatefulWidget {
   final Map<String, dynamic> data;
   final String tipoGrafico;
   final String usuarioNome;
+  final String usuarioId;
 
-  const MetricasScreen({super.key, required this.data, required this.tipoGrafico, required this.usuarioNome});
+  const MetricasScreen({super.key, required this.data, required this.tipoGrafico, required this.usuarioNome, required this.usuarioId});
 
   @override
   State<MetricasScreen> createState() => _MetricasScreenState();
@@ -466,7 +467,7 @@ class _MetricasScreenState extends State<MetricasScreen> {
                               }
                             )
                           );
-                          Navigator.push(context, MaterialPageRoute(builder: (context) => DashboardCanvasScreen(usuarioNome: widget.usuarioNome)));
+                          Navigator.push(context, MaterialPageRoute(builder: (context) => DashboardCanvasScreen(usuarioNome: widget.usuarioNome, usuarioId: widget.usuarioId)));
                         },
                         icon: const Icon(Icons.check),
                         label: const Text("Adicionar ao Dashboard", style: TextStyle(fontSize: 16)),

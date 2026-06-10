@@ -31,14 +31,13 @@ def save(dados_json, insight_texto, nome_arquivo="Upload_Manual.csv"):
         print(f"--- Erro ao salvar no banco Supabase: {e}")
         return False
     
-def save_dashboard(titulo, graficos_config):
+def save_dashboard(titulo: str, graficos_config: list, usuario_id: str):
     try:
         novo_dashboard = {
             "titulo": titulo,
             "icone": "dashboard_customize",
-            "graficos_config": graficos_config, # O JSON que o Flutter vai mandar
-            # Se você já tiver o ID do usuário logado, adicione aqui:
-            # "usuario_id": "id_do_usuario" 
+            "graficos_config": graficos_config, 
+            "usuario_id": usuario_id # <- ADICIONAMOS O DONO DO DASHBOARD AQUI
         }
         
         resposta = supabase_db.table("dashboards").insert(novo_dashboard).execute()
@@ -48,11 +47,11 @@ def save_dashboard(titulo, graficos_config):
         print(f"--- Erro ao salvar dashboard no Supabase: {e}")
         return False
     
-def get_dashboards():
+def get_dashboards(usuario_id: str):
     try:
-        # Busca todos os registros da tabela 'dashboards' ordenando pelos mais recentes
-        resposta = supabase_db.table("dashboards").select("*").order("created_at", desc=True).execute()
-        return resposta.data # Retorna a lista de dicionários (JSON)
+        # O '.eq("usuario_id", usuario_id)' funciona como um "WHERE" do SQL
+        resposta = supabase_db.table("dashboards").select("*").eq("usuario_id", usuario_id).order("created_at", desc=True).execute()
+        return resposta.data 
     except Exception as e:
         print(f"--- Erro ao buscar dashboards: {e}")
         return []
