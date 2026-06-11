@@ -5,6 +5,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import '../../../core/app_theme_controller.dart';
+import '../../../core/widgets/app_logo.dart';
+import '../../auth/screens/login_screen.dart';
 import '../../upload/screens/upload_screen.dart';
 import '../../dashboard/dashboard_manager.dart';
 import '../../dashboard/screens/dashboard_canvas_screen.dart';
@@ -178,6 +181,29 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void _logout() {
+    DashboardManager.graficosAtivos.clear();
+    DashboardManager.dashboardsSalvos.clear();
+    DashboardManager.fontesSalvas.clear();
+    DashboardManager.dadosFonteAtual = null;
+    DashboardManager.dashboardAtualId = null;
+    DashboardManager.usuarioAtualId = null;
+    DashboardManager.usuarioAtualNome = null;
+    DashboardManager.usuarioAtualEmail = null;
+    DashboardManager.usuarioAtualIdade = null;
+    DashboardManager.usuarioAtualTelefone = null;
+    DashboardManager.usuarioAtualCargo = null;
+    DashboardManager.usuarioAtualEmpresa = null;
+    DashboardManager.usuarioAtualBio = null;
+    DashboardManager.usuarioAtualFoto = null;
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => const LoginScreen()),
+      (route) => false,
+    );
+  }
+
   // ==========================================
   // BUSCA OS DASHBOARDS DO BACKEND (SUPABASE)
   // ==========================================
@@ -251,11 +277,20 @@ class _HomeScreenState extends State<HomeScreen> {
   // MENU LATERAL (SIDEBAR) RESPONSIVO
   // ==========================================
   Widget _buildSidebar() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     return Container(
       width: 260,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(right: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        border: Border(
+          right: BorderSide(
+            color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+            width: 1,
+          ),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -263,49 +298,27 @@ class _HomeScreenState extends State<HomeScreen> {
           Padding(
             padding: const EdgeInsets.all(24.0),
             child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF2563EB),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(
-                    Icons.flash_on,
-                    color: Colors.white,
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const Text(
-                  "FLASH-DASH",
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF0F172A),
-                    letterSpacing: -0.5,
-                  ),
-                ),
-              ],
+              children: [Expanded(child: AppLogo(size: 42, showText: true))],
             ),
           ),
           const SizedBox(height: 16),
           _buildMenuItem(Icons.dashboard_rounded, "Dashboards", 0),
           _buildMenuItem(Icons.receipt_long_rounded, "Logs ETL", 1),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
             child: Text(
               "SISTEMA",
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
-                color: Colors.blueGrey,
+                color: colorScheme.onSurface.withValues(alpha: 0.54),
               ),
             ),
           ),
           _buildMenuItem(Icons.settings_suggest_rounded, "Configuracoes", 2),
           _buildMenuItem(Icons.person_outline_rounded, "Perfil", 3),
           const Spacer(),
+          _buildMenuItem(Icons.logout_rounded, "Sair", -1),
           const Divider(height: 1),
           Padding(
             padding: const EdgeInsets.all(16.0),
@@ -319,18 +332,19 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       Text(
                         DashboardManager.usuarioAtualNome ?? "Flash Dash",
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
+                          color: colorScheme.onSurface,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
                         DashboardManager.usuarioAtualCargo ?? "Workspace BI",
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
-                          color: Colors.blueGrey,
+                          color: colorScheme.onSurface.withValues(alpha: 0.6),
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -348,27 +362,35 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildMenuItem(IconData icon, String title, int index) {
     bool isSelected = _indiceSelecionado == index;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final idleColor = colorScheme.onSurface.withValues(alpha: 0.64);
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
-        color: isSelected ? const Color(0xFFEFF6FF) : Colors.transparent,
+        color: isSelected
+            ? (isDark ? const Color(0xFF1E3A8A) : const Color(0xFFEFF6FF))
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(8),
       ),
       child: ListTile(
         leading: Icon(
           icon,
-          color: isSelected ? const Color(0xFF2563EB) : const Color(0xFF64748B),
+          color: isSelected ? const Color(0xFF2563EB) : idleColor,
         ),
         title: Text(
           title,
           style: TextStyle(
-            color: isSelected
-                ? const Color(0xFF2563EB)
-                : const Color(0xFF64748B),
+            color: isSelected ? const Color(0xFF2563EB) : idleColor,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
           ),
         ),
         onTap: () {
+          if (index == -1) {
+            _logout();
+            return;
+          }
           setState(() => _indiceSelecionado = index);
           if (MediaQuery.of(context).size.width < 800) {
             Navigator.pop(context);
@@ -384,20 +406,15 @@ class _HomeScreenState extends State<HomeScreen> {
   // ==========================================
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     double screenWidth = MediaQuery.of(context).size.width;
     bool isDesktop = screenWidth >= 800;
     double paddingGlobal = isDesktop ? 40.0 : 16.0;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: !isDesktop
-          ? AppBar(
-              title: const Text(
-                "FLASH-DASH",
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              backgroundColor: Colors.white,
-            )
+          ? AppBar(title: const AppLogo(size: 34, showText: true))
           : null,
       drawer: !isDesktop ? Drawer(child: _buildSidebar()) : null,
 
@@ -423,6 +440,9 @@ class _HomeScreenState extends State<HomeScreen> {
   // ABA 0: TELA DOS DASHBOARDS (COM PRÃ‰-VISUALIZAÃ‡ÃƒO)
   // ==========================================
   Widget _buildTelaDashboards(bool isDesktop, double paddingGlobal) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     int crossAxisCount = isDesktop
         ? 3
         : (MediaQuery.of(context).size.width >= 600 ? 2 : 1);
@@ -435,10 +455,15 @@ class _HomeScreenState extends State<HomeScreen> {
             horizontal: paddingGlobal,
             vertical: isDesktop ? 24 : 16,
           ),
-          decoration: const BoxDecoration(
-            color: Colors.white,
+          decoration: BoxDecoration(
+            color: colorScheme.surface,
             border: Border(
-              bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1),
+              bottom: BorderSide(
+                color: isDark
+                    ? const Color(0xFF334155)
+                    : const Color(0xFFE2E8F0),
+                width: 1,
+              ),
             ),
           ),
           child: Row(
@@ -449,7 +474,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: TextStyle(
                   fontSize: isDesktop ? 28 : 20,
                   fontWeight: FontWeight.bold,
-                  color: const Color(0xFF0F172A),
+                  color: colorScheme.onSurface,
                 ),
               ),
               ElevatedButton.icon(
@@ -912,6 +937,10 @@ class _HomeScreenState extends State<HomeScreen> {
   // ABA 2: TELA DE LOGS DE AUDITORIA (ETL)
   // ==========================================
   Widget _buildTelaLogsETL(bool isDesktop, double paddingGlobal) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     IconData getIconParaFase(String? fase) {
       if (fase == null) return Icons.info_outline;
       if (fase.contains('ExtraÃ§Ã£o')) return Icons.cloud_download_rounded;
@@ -932,10 +961,15 @@ class _HomeScreenState extends State<HomeScreen> {
             horizontal: paddingGlobal,
             vertical: isDesktop ? 24 : 16,
           ),
-          decoration: const BoxDecoration(
-            color: Colors.white,
+          decoration: BoxDecoration(
+            color: colorScheme.surface,
             border: Border(
-              bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1),
+              bottom: BorderSide(
+                color: isDark
+                    ? const Color(0xFF334155)
+                    : const Color(0xFFE2E8F0),
+                width: 1,
+              ),
             ),
           ),
           child: Row(
@@ -945,7 +979,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: TextStyle(
                   fontSize: isDesktop ? 28 : 20,
                   fontWeight: FontWeight.bold,
-                  color: const Color(0xFF0F172A),
+                  color: colorScheme.onSurface,
                 ),
               ),
             ],
@@ -1147,6 +1181,45 @@ class _HomeScreenState extends State<HomeScreen> {
                         'Usa a composicao real dos graficos como capa.',
                       ),
                     ),
+                    const SizedBox(height: 18),
+                    Text(
+                      'Tema',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    ValueListenableBuilder<ThemeMode>(
+                      valueListenable: AppThemeController.themeMode,
+                      builder: (context, themeMode, _) {
+                        return SegmentedButton<ThemeMode>(
+                          selected: {themeMode},
+                          onSelectionChanged: (selection) {
+                            AppThemeController.themeMode.value =
+                                selection.first;
+                          },
+                          segments: const [
+                            ButtonSegment(
+                              value: ThemeMode.system,
+                              icon: Icon(Icons.brightness_auto_outlined),
+                              label: Text('Sistema'),
+                            ),
+                            ButtonSegment(
+                              value: ThemeMode.light,
+                              icon: Icon(Icons.light_mode_outlined),
+                              label: Text('Claro'),
+                            ),
+                            ButtonSegment(
+                              value: ThemeMode.dark,
+                              icon: Icon(Icons.dark_mode_outlined),
+                              label: Text('Escuro'),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -1344,14 +1417,23 @@ class _HomeScreenState extends State<HomeScreen> {
     required bool isDesktop,
     Widget? acao,
   }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: paddingGlobal,
         vertical: isDesktop ? 24 : 16,
       ),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        border: Border(
+          bottom: BorderSide(
+            color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+            width: 1,
+          ),
+        ),
       ),
       child: Row(
         children: [
@@ -1364,13 +1446,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   style: TextStyle(
                     fontSize: isDesktop ? 28 : 20,
                     fontWeight: FontWeight.bold,
-                    color: const Color(0xFF0F172A),
+                    color: colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   subtitulo,
-                  style: const TextStyle(color: Color(0xFF64748B)),
+                  style: TextStyle(
+                    color: colorScheme.onSurface.withValues(alpha: 0.64),
+                  ),
                 ),
               ],
             ),
@@ -1382,16 +1466,22 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildPainel({required Widget child}) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: isDark ? 0.16 : 0.04),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),

@@ -2,10 +2,12 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
+import '../../../core/widgets/app_logo.dart';
 import '../dashboard_manager.dart';
 import '../widgets/chart_renderer.dart';
 import '../../home/screens/home_screen.dart';
 import '../../resultado/screens/selecao_grafico_screen.dart';
+import '../../upload/screens/upload_screen.dart';
 
 class DashboardCanvasScreen extends StatefulWidget {
   const DashboardCanvasScreen({super.key});
@@ -15,10 +17,13 @@ class DashboardCanvasScreen extends StatefulWidget {
 }
 
 class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
+  static const double _dashboardWidth = 1280;
+  static const double _dashboardHeight = 720;
   final List<Map<String, String>> _mensagensChat = [];
   final TextEditingController _chatController = TextEditingController();
   final Map<String, Set<String>> _filtrosSegmentacao = {};
   bool _isChatLoading = false;
+  bool _modoApresentacao = false;
 
   // ==========================================
   // Snap magnetico da grade.
@@ -456,102 +461,169 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
     bool isDesktop = MediaQuery.of(context).size.width >= 600;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          isDesktop ? 'Area de Trabalho' : 'Dashboard',
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF0F172A),
-        elevation: 1,
-        shadowColor: Colors.black12,
-        actions: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
-            child: isDesktop
-                ? ElevatedButton.icon(
-                    onPressed: _salvarDashboard,
-                    icon: const Icon(Icons.save_rounded, size: 18),
-                    label: const Text("Salvar Dashboard"),
-                  )
-                : IconButton(
-                    icon: const Icon(
-                      Icons.save_rounded,
-                      color: Color(0xFF2563EB),
-                    ),
-                    onPressed: _salvarDashboard,
-                    tooltip: "Salvar",
+      appBar: _modoApresentacao
+          ? null
+          : AppBar(
+              title: Text(
+                isDesktop ? 'Area de Trabalho' : 'Dashboard',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              backgroundColor: Colors.white,
+              foregroundColor: const Color(0xFF0F172A),
+              elevation: 1,
+              shadowColor: Colors.black12,
+              actions: [
+                const Padding(
+                  padding: EdgeInsets.only(right: 8),
+                  child: AppLogo(size: 30, opacity: 0.72),
+                ),
+                IconButton(
+                  icon: const Icon(
+                    Icons.save_rounded,
+                    color: Color(0xFF2563EB),
                   ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.auto_awesome, color: Colors.amber),
-            onPressed: _abrirChatIA,
-            tooltip: "Chat com a IA",
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-            onPressed: _excluirDashboardAtual,
-            tooltip: "Excluir dashboard",
-          ),
-          if (isDesktop)
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              onPressed: () => setState(() {}),
-              tooltip: "Atualizar layout",
+                  onPressed: _salvarDashboard,
+                  tooltip: "Salvar",
+                ),
+                IconButton(
+                  icon: const Icon(Icons.slideshow_rounded),
+                  onPressed: () => setState(() => _modoApresentacao = true),
+                  tooltip: "Modo apresentacao",
+                ),
+                IconButton(
+                  icon: const Icon(Icons.auto_awesome, color: Colors.amber),
+                  onPressed: _abrirChatIA,
+                  tooltip: "Chat com a IA",
+                ),
+                PopupMenuButton<String>(
+                  tooltip: "Mais opcoes",
+                  onSelected: (value) {
+                    if (value == 'excluir') _excluirDashboardAtual();
+                    if (value == 'atualizar') setState(() {});
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'atualizar',
+                      child: Text('Atualizar layout'),
+                    ),
+                    const PopupMenuItem(
+                      value: 'excluir',
+                      child: Text('Excluir dashboard'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+      body: Stack(
+        children: [
+          _buildCanvas(),
+          if (_modoApresentacao)
+            Positioned(
+              top: 12,
+              right: 12,
+              child: SafeArea(
+                child: FilledButton.tonalIcon(
+                  onPressed: () => setState(() => _modoApresentacao = false),
+                  icon: const Icon(Icons.close_fullscreen_rounded),
+                  label: const Text('Sair'),
+                ),
+              ),
             ),
         ],
       ),
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        color: const Color(
-          0xFFF8FAFC,
-        ), // Fundo cinza-claro muito sutil (Slate 50)
-        child: InteractiveViewer(
-          boundaryMargin: const EdgeInsets.all(
-            double.infinity,
-          ), // Permite arrastar para o infinito
-          minScale: 0.1, // Zoom out profundo
-          maxScale: 3.0, // Zoom in detalhado
-          constrained:
-              false, // Libera o tamanho interno para ser maior que a tela
-          child: SizedBox(
-            width: 10000, // Espaco amplo de 10k x 10k.
-            height: 10000,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: DashboardManager.graficosAtivos.map((config) {
-                return Positioned(
-                  left: config.posicao.dx,
-                  top: config.posicao.dy,
-                  child: _buildResizableDraggableChart(config),
+      floatingActionButton: _modoApresentacao
+          ? null
+          : FloatingActionButton(
+              backgroundColor: const Color(0xFF2563EB),
+              elevation: 4,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              tooltip: "Adicionar Grafico",
+              child: const Icon(Icons.add, color: Colors.white),
+              onPressed: () {
+                final dadosFonte = DashboardManager.dadosFonteAtual;
+                if (dadosFonte == null) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const UploadScreen(),
+                    ),
+                  );
+                  return;
+                }
+
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        SelecaoGraficoScreen(data: dadosFonte),
+                  ),
                 );
-              }).toList(),
+              },
+            ),
+    );
+  }
+
+  Widget _buildCanvas() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final areaWidth = constraints.maxWidth > _dashboardWidth
+            ? constraints.maxWidth
+            : _dashboardWidth;
+        final areaHeight = constraints.maxHeight > _dashboardHeight
+            ? constraints.maxHeight
+            : _dashboardHeight;
+
+        return Container(
+          width: double.infinity,
+          height: double.infinity,
+          color: _modoApresentacao ? Colors.black : const Color(0xFFF8FAFC),
+          child: InteractiveViewer(
+            boundaryMargin: const EdgeInsets.all(240),
+            minScale: 0.35,
+            maxScale: 3.0,
+            constrained: false,
+            child: SizedBox(
+              width: areaWidth,
+              height: areaHeight,
+              child: Center(
+                child: Container(
+                  width: _dashboardWidth,
+                  height: _dashboardHeight,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: _modoApresentacao
+                        ? null
+                        : Border.all(color: const Color(0xFFCBD5E1)),
+                    boxShadow: _modoApresentacao
+                        ? null
+                        : [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.08),
+                              blurRadius: 24,
+                              offset: const Offset(0, 12),
+                            ),
+                          ],
+                  ),
+                  child: ClipRect(
+                    child: Stack(
+                      clipBehavior: Clip.hardEdge,
+                      children: DashboardManager.graficosAtivos.map((config) {
+                        return Positioned(
+                          left: config.posicao.dx,
+                          top: config.posicao.dy,
+                          child: _buildResizableDraggableChart(config),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFF2563EB),
-        elevation: 4,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        tooltip: "Adicionar Grafico",
-        child: const Icon(Icons.add, color: Colors.white),
-        onPressed: () {
-          final dadosFonte = DashboardManager.dadosFonteAtual;
-          if (dadosFonte == null) {
-            Navigator.pop(context);
-            return;
-          }
-
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => SelecaoGraficoScreen(data: dadosFonte),
-            ),
-          );
-        },
-      ),
+        );
+      },
     );
   }
 
@@ -2100,20 +2172,18 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
   Widget _buildConteudoComLegenda(ChartConfig config) {
     final visualConfig = _configVisual(config);
     final tipo = config.tipo.toLowerCase();
-    Widget chartWidget = Expanded(
-      child: ChartRenderer(
-        config: visualConfig,
-        filtrosSelecionados: _filtrosSegmentacao[config.dimensao],
-        onSegmentacaoChanged: tipo.contains('segment')
-            ? (selecionados) => setState(() {
-                if (selecionados.isEmpty) {
-                  _filtrosSegmentacao.remove(config.dimensao);
-                } else {
-                  _filtrosSegmentacao[config.dimensao] = selecionados;
-                }
-              })
-            : null,
-      ),
+    Widget chartWidget = ChartRenderer(
+      config: visualConfig,
+      filtrosSelecionados: _filtrosSegmentacao[config.dimensao],
+      onSegmentacaoChanged: tipo.contains('segment')
+          ? (selecionados) => setState(() {
+              if (selecionados.isEmpty) {
+                _filtrosSegmentacao.remove(config.dimensao);
+              } else {
+                _filtrosSegmentacao[config.dimensao] = selecionados;
+              }
+            })
+          : null,
     );
 
     if (!_tipoUsaLegenda(config.tipo) ||
@@ -2178,19 +2248,35 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
 
     if (config.posicaoLegenda == 'top')
       return Column(
-        children: [safeLegenda, const SizedBox(height: 8), chartWidget],
+        children: [
+          safeLegenda,
+          const SizedBox(height: 8),
+          Expanded(child: chartWidget),
+        ],
       );
     if (config.posicaoLegenda == 'bottom')
       return Column(
-        children: [chartWidget, const SizedBox(height: 8), safeLegenda],
+        children: [
+          Expanded(child: chartWidget),
+          const SizedBox(height: 8),
+          safeLegenda,
+        ],
       );
     if (config.posicaoLegenda == 'left')
       return Row(
-        children: [safeLegenda, const SizedBox(width: 8), chartWidget],
+        children: [
+          safeLegenda,
+          const SizedBox(width: 8),
+          Expanded(child: chartWidget),
+        ],
       );
     if (config.posicaoLegenda == 'right')
       return Row(
-        children: [chartWidget, const SizedBox(width: 8), safeLegenda],
+        children: [
+          Expanded(child: chartWidget),
+          const SizedBox(width: 8),
+          safeLegenda,
+        ],
       );
 
     return chartWidget;
@@ -2241,13 +2327,21 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
             Positioned.fill(
               child: GestureDetector(
                 // 2. Mude o onTapDown apenas para trazer para frente
-                onTapDown: (_) {
-                  _trazerParaFrente(config);
-                },
+                onTapDown: _modoApresentacao
+                    ? null
+                    : (_) {
+                        _trazerParaFrente(config);
+                      },
                 // 3. Use o onLongPressStart (ele captura os detalhes da posiÃ§Ã£o do clique longo)
-                onLongPressStart: (details) {
-                  _mostrarMenuContexto(context, config, details.globalPosition);
-                },
+                onLongPressStart: _modoApresentacao
+                    ? null
+                    : (details) {
+                        _mostrarMenuContexto(
+                          context,
+                          config,
+                          details.globalPosition,
+                        );
+                      },
                 child: Card(
                   color: config.corFundo.withValues(alpha: bgOpacity),
                   elevation: config.mostrarSombra ? 2 : 0,
@@ -2386,174 +2480,187 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
 
             // CONTROLES DE REDIMENSIONAMENTO INVISÃVEIS (Bordas)
             // Leste
-            Align(
-              alignment: Alignment.centerRight,
-              child: MouseRegion(
-                cursor: SystemMouseCursors.resizeLeftRight,
-                child: GestureDetector(
-                  onPanStart: (_) => _trazerParaFrente(config),
-                  onPanUpdate: (details) => setState(() {
-                    double novaLargura =
-                        config.tamanho.width + details.delta.dx;
-                    if (novaLargura >= minWidth)
-                      config.tamanho = Size(novaLargura, config.tamanho.height);
-                  }),
-                  onPanEnd: (_) => setState(
-                    () => config.tamanho = Size(
-                      _snap(config.tamanho.width),
-                      config.tamanho.height,
+            if (!_modoApresentacao)
+              Align(
+                alignment: Alignment.centerRight,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.resizeLeftRight,
+                  child: GestureDetector(
+                    onPanStart: (_) => _trazerParaFrente(config),
+                    onPanUpdate: (details) => setState(() {
+                      double novaLargura =
+                          config.tamanho.width + details.delta.dx;
+                      if (novaLargura >= minWidth)
+                        config.tamanho = Size(
+                          novaLargura,
+                          config.tamanho.height,
+                        );
+                    }),
+                    onPanEnd: (_) => setState(
+                      () => config.tamanho = Size(
+                        _snap(config.tamanho.width),
+                        config.tamanho.height,
+                      ),
                     ),
-                  ),
-                  child: Container(
-                    width: espessuraBorda,
-                    height: double.infinity,
-                    color: Colors.transparent,
+                    child: Container(
+                      width: espessuraBorda,
+                      height: double.infinity,
+                      color: Colors.transparent,
+                    ),
                   ),
                 ),
               ),
-            ),
 
             // Oeste
-            Align(
-              alignment: Alignment.centerLeft,
-              child: MouseRegion(
-                cursor: SystemMouseCursors.resizeLeftRight,
-                child: GestureDetector(
-                  onPanStart: (_) => _trazerParaFrente(config),
-                  onPanUpdate: (details) => setState(() {
-                    double novaLargura =
-                        config.tamanho.width - details.delta.dx;
-                    if (novaLargura >= minWidth) {
+            if (!_modoApresentacao)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.resizeLeftRight,
+                  child: GestureDetector(
+                    onPanStart: (_) => _trazerParaFrente(config),
+                    onPanUpdate: (details) => setState(() {
+                      double novaLargura =
+                          config.tamanho.width - details.delta.dx;
+                      if (novaLargura >= minWidth) {
+                        config.posicao = Offset(
+                          config.posicao.dx + details.delta.dx,
+                          config.posicao.dy,
+                        );
+                        config.tamanho = Size(
+                          novaLargura,
+                          config.tamanho.height,
+                        );
+                      }
+                    }),
+                    onPanEnd: (_) => setState(() {
                       config.posicao = Offset(
-                        config.posicao.dx + details.delta.dx,
+                        _snap(config.posicao.dx),
                         config.posicao.dy,
                       );
-                      config.tamanho = Size(novaLargura, config.tamanho.height);
-                    }
-                  }),
-                  onPanEnd: (_) => setState(() {
-                    config.posicao = Offset(
-                      _snap(config.posicao.dx),
-                      config.posicao.dy,
-                    );
-                    config.tamanho = Size(
-                      _snap(config.tamanho.width),
-                      config.tamanho.height,
-                    );
-                  }),
-                  child: Container(
-                    width: espessuraBorda,
-                    height: double.infinity,
-                    color: Colors.transparent,
-                  ),
-                ),
-              ),
-            ),
-
-            // Sul
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: MouseRegion(
-                cursor: SystemMouseCursors.resizeUpDown,
-                child: GestureDetector(
-                  onPanStart: (_) => _trazerParaFrente(config),
-                  onPanUpdate: (details) => setState(() {
-                    double novaAltura =
-                        config.tamanho.height + details.delta.dy;
-                    if (novaAltura >= minHeight)
-                      config.tamanho = Size(config.tamanho.width, novaAltura);
-                  }),
-                  onPanEnd: (_) => setState(
-                    () => config.tamanho = Size(
-                      config.tamanho.width,
-                      _snap(config.tamanho.height),
+                      config.tamanho = Size(
+                        _snap(config.tamanho.width),
+                        config.tamanho.height,
+                      );
+                    }),
+                    child: Container(
+                      width: espessuraBorda,
+                      height: double.infinity,
+                      color: Colors.transparent,
                     ),
                   ),
-                  child: Container(
-                    width: double.infinity,
-                    height: espessuraBorda,
-                    color: Colors.transparent,
+                ),
+              ),
+
+            // Sul
+            if (!_modoApresentacao)
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.resizeUpDown,
+                  child: GestureDetector(
+                    onPanStart: (_) => _trazerParaFrente(config),
+                    onPanUpdate: (details) => setState(() {
+                      double novaAltura =
+                          config.tamanho.height + details.delta.dy;
+                      if (novaAltura >= minHeight)
+                        config.tamanho = Size(config.tamanho.width, novaAltura);
+                    }),
+                    onPanEnd: (_) => setState(
+                      () => config.tamanho = Size(
+                        config.tamanho.width,
+                        _snap(config.tamanho.height),
+                      ),
+                    ),
+                    child: Container(
+                      width: double.infinity,
+                      height: espessuraBorda,
+                      color: Colors.transparent,
+                    ),
                   ),
                 ),
               ),
-            ),
 
             // Norte
-            Align(
-              alignment: Alignment.topCenter,
-              child: MouseRegion(
-                cursor: SystemMouseCursors.resizeUpDown,
-                child: GestureDetector(
-                  onPanStart: (_) => _trazerParaFrente(config),
-                  onPanUpdate: (details) => setState(() {
-                    double novaAltura =
-                        config.tamanho.height - details.delta.dy;
-                    if (novaAltura >= minHeight) {
+            if (!_modoApresentacao)
+              Align(
+                alignment: Alignment.topCenter,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.resizeUpDown,
+                  child: GestureDetector(
+                    onPanStart: (_) => _trazerParaFrente(config),
+                    onPanUpdate: (details) => setState(() {
+                      double novaAltura =
+                          config.tamanho.height - details.delta.dy;
+                      if (novaAltura >= minHeight) {
+                        config.posicao = Offset(
+                          config.posicao.dx,
+                          config.posicao.dy + details.delta.dy,
+                        );
+                        config.tamanho = Size(config.tamanho.width, novaAltura);
+                      }
+                    }),
+                    onPanEnd: (_) => setState(() {
                       config.posicao = Offset(
                         config.posicao.dx,
-                        config.posicao.dy + details.delta.dy,
+                        _snap(config.posicao.dy),
                       );
-                      config.tamanho = Size(config.tamanho.width, novaAltura);
-                    }
-                  }),
-                  onPanEnd: (_) => setState(() {
-                    config.posicao = Offset(
-                      config.posicao.dx,
-                      _snap(config.posicao.dy),
-                    );
-                    config.tamanho = Size(
-                      config.tamanho.width,
-                      _snap(config.tamanho.height),
-                    );
-                  }),
-                  child: Container(
-                    width: double.infinity,
-                    height: espessuraBorda,
-                    color: Colors.transparent,
+                      config.tamanho = Size(
+                        config.tamanho.width,
+                        _snap(config.tamanho.height),
+                      );
+                    }),
+                    child: Container(
+                      width: double.infinity,
+                      height: espessuraBorda,
+                      color: Colors.transparent,
+                    ),
                   ),
                 ),
               ),
-            ),
 
             // Sudeste (Canto inferior direito com indicativo visual)
-            Align(
-              alignment: Alignment.bottomRight,
-              child: MouseRegion(
-                cursor: SystemMouseCursors.resizeUpLeftDownRight,
-                child: GestureDetector(
-                  onPanStart: (_) => _trazerParaFrente(config),
-                  onPanUpdate: (details) => setState(() {
-                    double novaLargura =
-                        config.tamanho.width + details.delta.dx;
-                    double novaAltura =
-                        config.tamanho.height + details.delta.dy;
-                    config.tamanho = Size(
-                      novaLargura > minWidth ? novaLargura : minWidth,
-                      novaAltura > minHeight ? novaAltura : minHeight,
-                    );
-                  }),
-                  onPanEnd: (_) => setState(() {
-                    config.tamanho = Size(
-                      _snap(config.tamanho.width),
-                      _snap(config.tamanho.height),
-                    );
-                  }),
-                  child: Container(
-                    width: 28,
-                    height: 28,
-                    decoration: const BoxDecoration(color: Colors.transparent),
-                    // Detalhe visual elegante indicando que ali redimensiona
-                    child: const Center(
-                      child: Icon(
-                        Icons.signal_cellular_4_bar_rounded,
-                        size: 14,
-                        color: Color(0xFFE2E8F0),
+            if (!_modoApresentacao)
+              Align(
+                alignment: Alignment.bottomRight,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.resizeUpLeftDownRight,
+                  child: GestureDetector(
+                    onPanStart: (_) => _trazerParaFrente(config),
+                    onPanUpdate: (details) => setState(() {
+                      double novaLargura =
+                          config.tamanho.width + details.delta.dx;
+                      double novaAltura =
+                          config.tamanho.height + details.delta.dy;
+                      config.tamanho = Size(
+                        novaLargura > minWidth ? novaLargura : minWidth,
+                        novaAltura > minHeight ? novaAltura : minHeight,
+                      );
+                    }),
+                    onPanEnd: (_) => setState(() {
+                      config.tamanho = Size(
+                        _snap(config.tamanho.width),
+                        _snap(config.tamanho.height),
+                      );
+                    }),
+                    child: Container(
+                      width: 28,
+                      height: 28,
+                      decoration: const BoxDecoration(
+                        color: Colors.transparent,
+                      ),
+                      // Detalhe visual elegante indicando que ali redimensiona
+                      child: const Center(
+                        child: Icon(
+                          Icons.signal_cellular_4_bar_rounded,
+                          size: 14,
+                          color: Color(0xFFE2E8F0),
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
           ],
         ),
       ),

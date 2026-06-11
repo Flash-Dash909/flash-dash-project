@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
+import '../../../core/widgets/app_logo.dart';
 import '../../home/screens/home_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -108,22 +109,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Icon(
-                Icons.person_add_alt_1_outlined,
-                size: 72,
-                color: Color(0xFF2563EB),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Cadastro',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF0F172A),
+              const ClipRect(
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  heightFactor: 0.83,
+                  child: AppLogo(size: 325),
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
               const Text(
                 'Crie seu acesso ao Flash Dash',
                 textAlign: TextAlign.center,

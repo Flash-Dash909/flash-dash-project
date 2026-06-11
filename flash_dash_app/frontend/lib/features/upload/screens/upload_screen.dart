@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import '../../../core/widgets/app_logo.dart';
 import '../../resultado/screens/selecao_grafico_screen.dart';
 
 class UploadScreen extends StatefulWidget {
@@ -96,6 +97,46 @@ class _UploadScreenState extends State<UploadScreen> {
       "cor": const Color(0xFF635BFF),
       "tipo": "stripe_export",
       "extensoes": ["csv", "json"],
+    },
+    {
+      "nome": "SharePoint",
+      "descricao": "Link CSV/XLSX",
+      "icone": Icons.folder_shared_rounded,
+      "cor": const Color(0xFF0369A1),
+      "tipo": "sharepoint_link",
+      "url": true,
+    },
+    {
+      "nome": "OneDrive",
+      "descricao": "Link compartilhado",
+      "icone": Icons.cloud_queue_rounded,
+      "cor": const Color(0xFF0078D4),
+      "tipo": "onedrive_link",
+      "url": true,
+    },
+    {
+      "nome": "Google Drive",
+      "descricao": "Link CSV/XLSX",
+      "icone": Icons.add_to_drive_rounded,
+      "cor": const Color(0xFF1A73E8),
+      "tipo": "google_drive_link",
+      "url": true,
+    },
+    {
+      "nome": "Power BI",
+      "descricao": "Export CSV/XLSX",
+      "icone": Icons.analytics_rounded,
+      "cor": const Color(0xFFF2C811),
+      "tipo": "powerbi_export",
+      "extensoes": ["csv", "xlsx", "json"],
+    },
+    {
+      "nome": "HubSpot",
+      "descricao": "Export CSV",
+      "icone": Icons.handshake_rounded,
+      "cor": const Color(0xFFFF7A59),
+      "tipo": "hubspot_export",
+      "extensoes": ["csv", "xlsx", "json"],
     },
   ];
 
@@ -222,24 +263,36 @@ class _UploadScreenState extends State<UploadScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     double screenWidth = MediaQuery.of(context).size.width;
     bool isDesktop = screenWidth >= 800;
-    int colunasGrid = isDesktop ? 5 : (screenWidth >= 600 ? 3 : 2);
     double paddingGlobal = isDesktop ? 40.0 : 16.0;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Conectar Fonte de Dados')),
-      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: AppBar(
+        title: const Text('Conectar Fonte de Dados'),
+        actions: const [
+          Padding(
+            padding: EdgeInsets.only(right: 16),
+            child: AppLogo(size: 32, opacity: 0.82),
+          ),
+        ],
+      ),
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: _isLoading
-          ? const Center(
+          ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
                   Text(
                     "Processando fonte de dados...",
-                    style: TextStyle(color: Colors.blueGrey),
+                    style: TextStyle(
+                      color: colorScheme.onSurface.withValues(alpha: 0.68),
+                    ),
                   ),
                 ],
               ),
@@ -254,7 +307,7 @@ class _UploadScreenState extends State<UploadScreen> {
                     style: TextStyle(
                       fontSize: isDesktop ? 24 : 20,
                       fontWeight: FontWeight.bold,
-                      color: const Color(0xFF0F172A),
+                      color: colorScheme.onSurface,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -262,18 +315,18 @@ class _UploadScreenState extends State<UploadScreen> {
                     "Escolha uma fonte para iniciar a extracao e limpeza automatica.",
                     style: TextStyle(
                       fontSize: isDesktop ? 16 : 14,
-                      color: const Color(0xFF64748B),
+                      color: colorScheme.onSurface.withValues(alpha: 0.68),
                     ),
                   ),
                   const SizedBox(height: 32),
                   GridView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: colunasGrid,
+                    gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: isDesktop ? 210 : 185,
+                      mainAxisExtent: isDesktop ? 188 : 174,
                       crossAxisSpacing: 16,
                       mainAxisSpacing: 16,
-                      childAspectRatio: isDesktop ? 1.08 : 1.0,
                     ),
                     itemCount: _fontesDeDados.length,
                     itemBuilder: (context, index) {
@@ -281,6 +334,7 @@ class _UploadScreenState extends State<UploadScreen> {
                       final Color cor = fonte['cor'];
 
                       return Card(
+                        color: isDark ? const Color(0xFF111827) : Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
                           side: BorderSide(
@@ -292,32 +346,34 @@ class _UploadScreenState extends State<UploadScreen> {
                           borderRadius: BorderRadius.circular(14),
                           onTap: () => _abrirFonte(fonte),
                           child: Padding(
-                            padding: const EdgeInsets.all(16),
+                            padding: EdgeInsets.all(isDesktop ? 16 : 12),
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Container(
                                   padding: const EdgeInsets.all(14),
                                   decoration: BoxDecoration(
-                                    color: cor.withValues(alpha: 0.12),
+                                    color: cor.withValues(
+                                      alpha: isDark ? 0.18 : 0.12,
+                                    ),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: Icon(
                                     fonte['icone'],
-                                    size: 34,
+                                    size: isDesktop ? 34 : 30,
                                     color: cor,
                                   ),
                                 ),
-                                const SizedBox(height: 12),
+                                SizedBox(height: isDesktop ? 12 : 10),
                                 Text(
                                   fonte['nome'],
                                   textAlign: TextAlign.center,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 14,
+                                  style: TextStyle(
+                                    fontSize: isDesktop ? 14 : 13,
                                     fontWeight: FontWeight.w700,
-                                    color: Color(0xFF0F172A),
+                                    color: colorScheme.onSurface,
                                   ),
                                 ),
                                 const SizedBox(height: 4),
@@ -326,9 +382,11 @@ class _UploadScreenState extends State<UploadScreen> {
                                   textAlign: TextAlign.center,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: Color(0xFF64748B),
+                                  style: TextStyle(
+                                    fontSize: isDesktop ? 12 : 11,
+                                    color: colorScheme.onSurface.withValues(
+                                      alpha: 0.66,
+                                    ),
                                   ),
                                 ),
                               ],

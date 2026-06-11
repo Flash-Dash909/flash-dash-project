@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import '../../../core/widgets/app_logo.dart';
 import '../../dashboard/dashboard_manager.dart';
 import '../../home/screens/home_screen.dart';
 
@@ -161,23 +162,15 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const SizedBox(height: 70),
-                  const Icon(
-                    Icons.insights_rounded,
-                    size: 88,
-                    color: Color(0xFF2563EB),
-                  ),
-                  const SizedBox(height: 24),
-                  const Text(
-                    'Flash Dash',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 34,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF0F172A),
+                  const SizedBox(height: 36),
+                  const ClipRect(
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      heightFactor: 0.83,
+                      child: AppLogo(size: 325),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 4),
                   Text(
                     _isLoginMode
                         ? 'Faça login para acessar seus dashboards'

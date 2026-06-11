@@ -1,141 +1,385 @@
 import 'package:flutter/material.dart';
-import 'star_schema_screen.dart'; // Importa a tela que acabamos de criar
+
+import 'star_schema_screen.dart';
 
 class EtlHistoryScreen extends StatelessWidget {
   final List<dynamic> logsEtl;
   final Map<String, dynamic> summary;
 
-  const EtlHistoryScreen({super.key, required this.logsEtl, required this.summary});
+  const EtlHistoryScreen({
+    super.key,
+    required this.logsEtl,
+    required this.summary,
+  });
 
-  // Mapeia o nome do ícone vindo do Python para um IconData real do Flutter
   IconData _getIcon(String iconName) {
     switch (iconName) {
-      case 'upload': return Icons.cloud_upload_outlined;
-      case 'cleaning': return Icons.cleaning_services_outlined;
-      case 'text_format': return Icons.spellcheck;
-      case 'schema': return Icons.account_tree_outlined;
-      case 'check_circle': return Icons.check_circle_outline;
-      default: return Icons.memory;
+      case 'upload':
+        return Icons.cloud_upload_outlined;
+      case 'cleaning':
+        return Icons.cleaning_services_outlined;
+      case 'text_format':
+        return Icons.spellcheck_rounded;
+      case 'schema':
+        return Icons.account_tree_outlined;
+      case 'check_circle':
+        return Icons.check_circle_outline_rounded;
+      default:
+        return Icons.memory_rounded;
     }
   }
 
+  Color _getColor(String iconName, bool isLast) {
+    if (isLast) return const Color(0xFF10B981);
+    switch (iconName) {
+      case 'upload':
+        return const Color(0xFF2563EB);
+      case 'cleaning':
+        return const Color(0xFF14B8A6);
+      case 'text_format':
+        return const Color(0xFFF59E0B);
+      case 'schema':
+        return const Color(0xFF7C3AED);
+      default:
+        return const Color(0xFF64748B);
+    }
+  }
+
+  int get _totalDimensoes =>
+      List<dynamic>.from(summary['dimensoes'] ?? []).length;
+
+  int get _totalMetricas =>
+      List<dynamic>.from(summary['metricas'] ?? []).length;
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Log de Transformação (ETL)'),
-        backgroundColor: Colors.blueGrey.shade900,
-        foregroundColor: Colors.white,
-      ),
-      backgroundColor: Colors.grey.shade100,
-      
-      // CORPO DA TELA: A LINHA DO TEMPO
-      body: logsEtl.isEmpty
-          ? const Center(child: Text("Nenhum histórico de ETL encontrado."))
-          : ListView.builder(
-              padding: const EdgeInsets.all(24.0),
-              itemCount: logsEtl.length,
-              itemBuilder: (context, index) {
-                final log = logsEtl[index];
-                bool isLast = index == logsEtl.length - 1;
+    final isDesktop = MediaQuery.of(context).size.width >= 850;
+    final horizontalPadding = isDesktop ? 40.0 : 16.0;
 
-                return IntrinsicHeight(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // COLUNA DA LINHA DO TEMPO (Timeline)
-                      SizedBox(
-                        width: 50,
-                        child: Column(
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: AppBar(
+        title: const Text('Auditoria ETL'),
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF0F172A),
+        elevation: 1,
+        shadowColor: Colors.black12,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: TextButton.icon(
+              onPressed: () => _abrirModeloEstrela(context),
+              icon: const Icon(Icons.hub_outlined),
+              label: Text(isDesktop ? 'Modelo estrela' : 'Modelo'),
+            ),
+          ),
+        ],
+      ),
+      body: logsEtl.isEmpty
+          ? const Center(
+              child: Text(
+                'Nenhum historico de ETL encontrado.',
+                style: TextStyle(color: Color(0xFF64748B)),
+              ),
+            )
+          : CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      horizontalPadding,
+                      28,
+                      horizontalPadding,
+                      16,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Linha do tempo dos dados',
+                          style: TextStyle(
+                            fontSize: isDesktop ? 28 : 22,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF0F172A),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Cada etapa mostra como a fonte foi extraida, limpa, padronizada e preparada para analise.',
+                          style: TextStyle(
+                            color: Color(0xFF64748B),
+                            height: 1.35,
+                          ),
+                        ),
+                        const SizedBox(height: 22),
+                        Wrap(
+                          spacing: 14,
+                          runSpacing: 14,
                           children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: isLast ? Colors.green : Colors.blueAccent,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                _getIcon(log['icone'] ?? ''),
-                                color: Colors.white,
-                                size: 20,
-                              ),
+                            _ResumoCard(
+                              icon: Icons.route_outlined,
+                              title: 'Etapas',
+                              value: logsEtl.length.toString(),
+                              color: const Color(0xFF2563EB),
                             ),
-                            if (!isLast)
-                              Expanded(
-                                child: Container(
-                                  width: 3,
-                                  color: Colors.blueAccent.withOpacity(0.3),
-                                ),
-                              ),
+                            _ResumoCard(
+                              icon: Icons.category_outlined,
+                              title: 'Dimensoes',
+                              value: _totalDimensoes.toString(),
+                              color: const Color(0xFF7C3AED),
+                            ),
+                            _ResumoCard(
+                              icon: Icons.functions_rounded,
+                              title: 'Metricas',
+                              value: _totalMetricas.toString(),
+                              color: const Color(0xFF10B981),
+                            ),
                           ],
                         ),
+                      ],
+                    ),
+                  ),
+                ),
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(
+                    horizontalPadding,
+                    8,
+                    horizontalPadding,
+                    120,
+                  ),
+                  sliver: SliverList.builder(
+                    itemCount: logsEtl.length,
+                    itemBuilder: (context, index) {
+                      final log = Map<String, dynamic>.from(logsEtl[index]);
+                      final isLast = index == logsEtl.length - 1;
+                      final iconName = log['icone']?.toString() ?? '';
+                      final color = _getColor(iconName, isLast);
+
+                      return _TimelineItem(
+                        icon: _getIcon(iconName),
+                        color: color,
+                        isLast: isLast,
+                        index: index + 1,
+                        title: log['fase']?.toString() ?? 'Processamento',
+                        description: log['descricao']?.toString() ?? '',
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+      bottomNavigationBar: SafeArea(
+        child: Container(
+          padding: EdgeInsets.fromLTRB(
+            horizontalPadding,
+            14,
+            horizontalPadding,
+            14,
+          ),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
+          ),
+          child: FilledButton.icon(
+            onPressed: () => _abrirModeloEstrela(context),
+            icon: const Icon(Icons.hub_outlined),
+            label: const Text('Ver e ajustar modelo estrela'),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(50),
+              backgroundColor: const Color(0xFF2563EB),
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _abrirModeloEstrela(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => StarSchemaScreen(summary: summary),
+      ),
+    );
+  }
+}
+
+class _ResumoCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String value;
+  final Color color;
+
+  const _ResumoCard({
+    required this.icon,
+    required this.title,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 190,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: color),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
+                    fontSize: 12,
+                  ),
+                ),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: Color(0xFF0F172A),
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TimelineItem extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final bool isLast;
+  final int index;
+  final String title;
+  final String description;
+
+  const _TimelineItem({
+    required this.icon,
+    required this.color,
+    required this.isLast,
+    required this.index,
+    required this.title,
+    required this.description,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: 48,
+            child: Column(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: color.withValues(alpha: 0.24),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
                       ),
-                      
-                      // COLUNA DO CONTEÚDO (O Log em si)
+                    ],
+                  ),
+                  child: Icon(icon, color: Colors.white, size: 20),
+                ),
+                if (!isLast)
+                  Expanded(
+                    child: Container(
+                      width: 2,
+                      margin: const EdgeInsets.symmetric(vertical: 6),
+                      color: const Color(0xFFE2E8F0),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Container(
+              margin: const EdgeInsets.only(left: 12, bottom: 18),
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          'Etapa $index',
+                          style: TextStyle(
+                            color: color,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
                       Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(bottom: 24.0, left: 12.0),
-                          child: Card(
-                            elevation: 2,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            child: Padding(
-                              padding: const EdgeInsets.all(16.0),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    log['fase'] ?? 'Processamento',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                      color: Colors.blueGrey.shade800,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    log['descricao'] ?? '',
-                                    style: TextStyle(
-                                      color: Colors.blueGrey.shade600,
-                                      height: 1.4,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+                        child: Text(
+                          title,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF0F172A),
                           ),
                         ),
                       ),
                     ],
                   ),
-                );
-              },
-            ),
-            
-      // BOTÃO FIXO NO FUNDO DA TELA
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.all(16.0),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -2))],
-        ),
-        child: ElevatedButton.icon(
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => StarSchemaScreen(summary: summary),
+                  if (description.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      description,
+                      style: const TextStyle(
+                        color: Color(0xFF475569),
+                        height: 1.42,
+                      ),
+                    ),
+                  ],
+                ],
               ),
-            );
-          },
-          icon: const Icon(Icons.hub), // Ícone de conexões/rede
-          label: const Text("Ver Modelagem Star Schema Automática", style: TextStyle(fontSize: 16)),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.indigo.shade600,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

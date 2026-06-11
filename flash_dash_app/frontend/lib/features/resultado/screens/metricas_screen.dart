@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/widgets/app_logo.dart';
 import '../../dashboard/dashboard_manager.dart';
 import '../../dashboard/screens/dashboard_canvas_screen.dart';
 import '../../dashboard/widgets/chart_renderer.dart';
@@ -21,6 +22,7 @@ class MetricasScreen extends StatefulWidget {
 class _MetricasScreenState extends State<MetricasScreen> {
   String? _dimensaoSelecionada;
   String? _metricaSelecionada;
+  String? _metricaSecundariaSelecionada;
   String _agregacao = 'Soma';
   int _limiteItens = 8;
   bool _ordenarDesc = true;
@@ -120,21 +122,49 @@ class _MetricasScreenState extends State<MetricasScreen> {
   bool get _isLinhaOuArea =>
       widget.tipoGrafico.contains('Linha') ||
       widget.tipoGrafico.contains('Area');
+  bool get _usaMetricaSecundaria =>
+      widget.tipoGrafico.contains('Empilhada') ||
+      widget.tipoGrafico.contains('Empilhadas') ||
+      widget.tipoGrafico.contains('100%') ||
+      widget.tipoGrafico.contains('Combo');
 
   bool get _isGauge => widget.tipoGrafico.contains('Gauge');
   bool get _isKpi =>
       widget.tipoGrafico.contains('KPI') ||
-      widget.tipoGrafico.contains('Cartao');
-  bool get _isTabela => widget.tipoGrafico.contains('Tabela');
+      widget.tipoGrafico.contains('Cartao') ||
+      widget.tipoGrafico.contains('Progress') ||
+      widget.tipoGrafico.contains('Bullet');
+  bool get _isTabela =>
+      widget.tipoGrafico.contains('Tabela') ||
+      widget.tipoGrafico.contains('Matriz');
   bool get _isSegmentacao => widget.tipoGrafico.contains('Segment');
   bool get _isTreemap => widget.tipoGrafico.contains('Treemap');
-  bool get _usaLegenda =>
-      !(_isKpi || _isTabela || _isSegmentacao || _isGauge || _isTreemap);
+  bool get _isSemLegenda =>
+      _isKpi ||
+      _isTabela ||
+      _isSegmentacao ||
+      _isGauge ||
+      _isTreemap ||
+      widget.tipoGrafico.contains('Funnel') ||
+      widget.tipoGrafico.contains('Waterfall') ||
+      widget.tipoGrafico.contains('Histograma') ||
+      widget.tipoGrafico.contains('Heatmap') ||
+      widget.tipoGrafico.contains('Mapa') ||
+      widget.tipoGrafico.contains('Sankey') ||
+      widget.tipoGrafico.contains('Gantt') ||
+      widget.tipoGrafico.contains('Timeline') ||
+      widget.tipoGrafico.contains('Network') ||
+      widget.tipoGrafico.contains('Decomposition') ||
+      widget.tipoGrafico.contains('Sunburst');
+  bool get _usaLegenda => !_isSemLegenda;
   bool get _usaEixos =>
       widget.tipoGrafico.contains('Barra') ||
       widget.tipoGrafico.contains('Coluna') ||
       _isLinhaOuArea ||
-      widget.tipoGrafico.contains('Dispers');
+      widget.tipoGrafico.contains('Dispers') ||
+      widget.tipoGrafico.contains('Histograma') ||
+      widget.tipoGrafico.contains('Waterfall') ||
+      widget.tipoGrafico.contains('Combo');
 
   @override
   void initState() {
@@ -144,8 +174,9 @@ class _MetricasScreenState extends State<MetricasScreen> {
 
   List<Map<String, dynamic>> _calcularDadosDinamicos(
     String dimensao,
-    String metrica,
-  ) {
+    String metrica, [
+    String? metricaSecundaria,
+  ]) {
     final dadosBrutos = _dadosBrutos;
     if (dadosBrutos.isEmpty) {
       return List<Map<String, dynamic>>.from(
@@ -156,6 +187,7 @@ class _MetricasScreenState extends State<MetricasScreen> {
     }
 
     final agrupamento = <String, List<double>>{};
+    final agrupamentoSecundario = <String, List<double>>{};
     for (final linha in dadosBrutos) {
       final chave = linha[dimensao]?.toString().trim().isNotEmpty == true
           ? linha[dimensao].toString()
@@ -165,6 +197,13 @@ class _MetricasScreenState extends State<MetricasScreen> {
           ? raw.toDouble()
           : double.tryParse(raw.toString().replaceAll(',', '.')) ?? 0.0;
       agrupamento.putIfAbsent(chave, () => []).add(valor);
+      if (metricaSecundaria != null && metricaSecundaria.isNotEmpty) {
+        final raw2 = linha[metricaSecundaria];
+        final valor2 = raw2 is num
+            ? raw2.toDouble()
+            : double.tryParse(raw2.toString().replaceAll(',', '.')) ?? 0.0;
+        agrupamentoSecundario.putIfAbsent(chave, () => []).add(valor2);
+      }
     }
 
     final paleta = [
@@ -188,10 +227,22 @@ class _MetricasScreenState extends State<MetricasScreen> {
         'Minimo' => valores.reduce((a, b) => a < b ? a : b),
         _ => soma,
       };
+      final valores2 = agrupamentoSecundario[entry.key] ?? const <double>[];
+      final soma2 = valores2.fold<double>(0, (total, valor) => total + valor);
+      final valor2 = valores2.isEmpty
+          ? 0.0
+          : switch (_agregacao) {
+              'Media' => soma2 / valores2.length,
+              'Contagem' => valores2.length.toDouble(),
+              'Maximo' => valores2.reduce((a, b) => a > b ? a : b),
+              'Minimo' => valores2.reduce((a, b) => a < b ? a : b),
+              _ => soma2,
+            };
       final index = agrupamento.keys.toList().indexOf(entry.key);
       return {
         "label": entry.key,
         "value": valor,
+        if (metricaSecundaria != null) "value2": valor2,
         "color": paleta[index % paleta.length],
       };
     }).toList();
@@ -204,9 +255,11 @@ class _MetricasScreenState extends State<MetricasScreen> {
     return dados.take(_limiteItens).toList();
   }
 
-  ChartConfig _criarConfigPreview(String dim, String met) {
+  ChartConfig _criarConfigPreview(String dim, String met, [String? met2]) {
     final titulo = _tituloPersonalizado.isEmpty
-        ? "$met por $dim"
+        ? met2 == null
+              ? "$met por $dim"
+              : "$met e $met2 por $dim"
         : _tituloPersonalizado;
     return ChartConfig(
       id: 'preview',
@@ -214,7 +267,7 @@ class _MetricasScreenState extends State<MetricasScreen> {
       titulo: titulo,
       dimensao: dim,
       metrica: met,
-      dados: _calcularDadosDinamicos(dim, met),
+      dados: _calcularDadosDinamicos(dim, met, met2),
       posicao: const Offset(50, 50),
       corFundo: _corFundo,
       fontSizeTitulo: _fontSizeTitulo,
@@ -229,6 +282,7 @@ class _MetricasScreenState extends State<MetricasScreen> {
       mostrarRotulos: _mostrarRotulos,
       configExtra: {
         'agregacao': _agregacao,
+        if (met2 != null) 'metricaSecundaria': met2,
         'limiteItens': _limiteItens,
         'ordenarDesc': _ordenarDesc,
         'mostrarPontos': _mostrarPontos,
@@ -304,23 +358,33 @@ class _MetricasScreenState extends State<MetricasScreen> {
 
   void _abrirPainelDeEdicao() {
     final tituloController = TextEditingController(text: _tituloPersonalizado);
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: colorScheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            final isCompact = MediaQuery.of(context).size.width < 600;
             return SizedBox(
-              height: MediaQuery.of(context).size.height * 0.88,
+              height:
+                  MediaQuery.of(context).size.height *
+                  (isCompact ? 0.94 : 0.88),
               child: Column(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 20, 16, 8),
+                    padding: EdgeInsets.fromLTRB(
+                      isCompact ? 16 : 24,
+                      18,
+                      12,
+                      8,
+                    ),
                     child: Row(
                       children: [
                         const Icon(
@@ -328,14 +392,18 @@ class _MetricasScreenState extends State<MetricasScreen> {
                           color: Color(0xFF2563EB),
                         ),
                         const SizedBox(width: 12),
-                        const Text(
-                          "Formatar visual",
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
+                        Expanded(
+                          child: Text(
+                            "Formatar visual",
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: colorScheme.onSurface,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        const Spacer(),
                         IconButton(
                           onPressed: () => Navigator.pop(context),
                           icon: const Icon(Icons.close),
@@ -346,7 +414,7 @@ class _MetricasScreenState extends State<MetricasScreen> {
                   const Divider(height: 1),
                   Expanded(
                     child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(24),
+                      padding: EdgeInsets.all(isCompact ? 12 : 24),
                       child: Column(
                         children: [
                           _secao("Dados", [
@@ -1068,22 +1136,28 @@ class _MetricasScreenState extends State<MetricasScreen> {
   }
 
   Widget _secao(String titulo, List<Widget> children) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: isDark ? const Color(0xFF111827) : const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             titulo,
-            style: const TextStyle(
+            style: TextStyle(
               fontWeight: FontWeight.bold,
-              color: Color(0xFF0F172A),
+              color: colorScheme.onSurface,
             ),
           ),
           const SizedBox(height: 12),
@@ -1123,16 +1197,32 @@ class _MetricasScreenState extends State<MetricasScreen> {
     double max,
     ValueChanged<double> onChanged,
   ) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 170,
-          child: Text("$label: ${value.toStringAsFixed(max <= 1 ? 2 : 0)}"),
-        ),
-        Expanded(
-          child: Slider(value: value, min: min, max: max, onChanged: onChanged),
-        ),
-      ],
+    final labelWidget = Text(
+      "$label: ${value.toStringAsFixed(max <= 1 ? 2 : 0)}",
+    );
+    final slider = Slider(
+      value: value,
+      min: min,
+      max: max,
+      onChanged: onChanged,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 430) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [labelWidget, slider],
+          );
+        }
+
+        return Row(
+          children: [
+            SizedBox(width: 170, child: labelWidget),
+            Expanded(child: slider),
+          ],
+        );
+      },
     );
   }
 
@@ -1142,23 +1232,39 @@ class _MetricasScreenState extends State<MetricasScreen> {
     Map<String, IconData> options,
     ValueChanged<String> onChanged,
   ) {
-    return Row(
-      children: [
-        SizedBox(width: 120, child: Text(label)),
-        ToggleButtons(
-          borderRadius: BorderRadius.circular(8),
-          isSelected: options.keys.map((key) => key == value).toList(),
-          onPressed: (index) => onChanged(options.keys.elementAt(index)),
-          children: options.values
-              .map(
-                (icon) => Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Icon(icon),
-                ),
-              )
-              .toList(),
-        ),
-      ],
+    final buttons = SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: ToggleButtons(
+        borderRadius: BorderRadius.circular(8),
+        isSelected: options.keys.map((key) => key == value).toList(),
+        onPressed: (index) => onChanged(options.keys.elementAt(index)),
+        children: options.values
+            .map(
+              (icon) => Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Icon(icon),
+              ),
+            )
+            .toList(),
+      ),
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 430) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [Text(label), const SizedBox(height: 8), buttons],
+          );
+        }
+
+        return Row(
+          children: [
+            SizedBox(width: 120, child: Text(label)),
+            Expanded(child: buttons),
+          ],
+        );
+      },
     );
   }
 
@@ -1168,33 +1274,48 @@ class _MetricasScreenState extends State<MetricasScreen> {
     List<Color> cores,
     ValueChanged<Color> onChanged,
   ) {
-    return Row(
-      children: [
-        SizedBox(width: 120, child: Text(label)),
-        Wrap(
-          spacing: 10,
-          children: cores.map((cor) {
-            return InkWell(
-              borderRadius: BorderRadius.circular(18),
-              onTap: () => onChanged(cor),
-              child: Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: cor,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: ativa == cor
-                        ? const Color(0xFF2563EB)
-                        : const Color(0xFFCBD5E1),
-                    width: ativa == cor ? 3 : 1,
-                  ),
-                ),
+    final swatches = Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: cores.map((cor) {
+        return InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () => onChanged(cor),
+          child: Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: cor,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: ativa == cor
+                    ? const Color(0xFF2563EB)
+                    : const Color(0xFFCBD5E1),
+                width: ativa == cor ? 3 : 1,
               ),
-            );
-          }).toList(),
-        ),
-      ],
+            ),
+          ),
+        );
+      }).toList(),
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 430) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [Text(label), const SizedBox(height: 8), swatches],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(width: 120, child: Text(label)),
+            Expanded(child: swatches),
+          ],
+        );
+      },
     );
   }
 
@@ -1209,33 +1330,151 @@ class _MetricasScreenState extends State<MetricasScreen> {
     final met =
         _metricaSelecionada ??
         (metricas.isNotEmpty ? metricas[0].toString() : "Valor");
+    final metricaSecundariaPadrao = metricas
+        .map((m) => m.toString())
+        .where((m) => m != met)
+        .cast<String>()
+        .toList();
+    final met2 = _usaMetricaSecundaria && metricaSecundariaPadrao.isNotEmpty
+        ? (_metricaSecundariaSelecionada != null &&
+                  metricaSecundariaPadrao.contains(
+                    _metricaSecundariaSelecionada,
+                  )
+              ? _metricaSecundariaSelecionada
+              : metricaSecundariaPadrao.first)
+        : null;
 
     if (!_tituloEditadoManualmente) {
-      _tituloPersonalizado = "$met por $dim";
+      _tituloPersonalizado = met2 == null
+          ? "$met por $dim"
+          : "$met e $met2 por $dim";
     }
 
-    final configPreview = _criarConfigPreview(dim, met);
+    final configPreview = _criarConfigPreview(dim, met, met2);
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     final isDesktop = MediaQuery.of(context).size.width >= 900;
+    final horizontalPadding = isDesktop ? 24.0 : 14.0;
+    final cardPadding = isDesktop ? 24.0 : 16.0;
+    final previewHeight = isDesktop ? 310.0 : 260.0;
     final alignPreview = _alinhamentoTitulo == 'center'
         ? TextAlign.center
         : (_alinhamentoTitulo == 'right' ? TextAlign.right : TextAlign.left);
 
+    final previewCard = Container(
+      constraints: BoxConstraints(minHeight: isDesktop ? 460 : 390),
+      decoration: BoxDecoration(
+        color: _corFundo,
+        borderRadius: BorderRadius.circular(_raioBorda),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: _borderWidth),
+        boxShadow: _mostrarSombra
+            ? const [
+                BoxShadow(
+                  color: Colors.black12,
+                  blurRadius: 10,
+                  offset: Offset(0, 4),
+                ),
+              ]
+            : [],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: EdgeInsets.all(isDesktop ? 16 : 12),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              alignment: WrapAlignment.spaceBetween,
+              children: [
+                SizedBox(
+                  width: isDesktop ? 420 : double.infinity,
+                  child: Text(
+                    configPreview.titulo,
+                    textAlign: alignPreview,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: _fontSizeTitulo,
+                      color: _corTextoTitulo,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: _abrirPainelDeEdicao,
+                  icon: const Icon(Icons.brush, size: 16),
+                  label: const Text("Editar"),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          SizedBox(
+            height: previewHeight,
+            child: Padding(
+              padding: EdgeInsets.all(_contentPadding),
+              child: ChartRenderer(config: configPreview),
+            ),
+          ),
+          const Divider(height: 1),
+          Padding(
+            padding: EdgeInsets.all(isDesktop ? 16 : 12),
+            child: ElevatedButton.icon(
+              onPressed: () {
+                DashboardManager.graficosAtivos.add(
+                  configPreview
+                    ..id = DateTime.now().millisecondsSinceEpoch.toString(),
+                );
+                DashboardManager.dadosFonteAtual = widget.data;
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const DashboardCanvasScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.check),
+              label: const Text("Adicionar ao Dashboard"),
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 48),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
     return Scaffold(
-      appBar: AppBar(title: Text('Criar ${widget.tipoGrafico}')),
-      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: AppBar(
+        title: Text('Criar ${widget.tipoGrafico}'),
+        actions: const [
+          Padding(
+            padding: EdgeInsets.only(right: 16),
+            child: AppLogo(size: 32, opacity: 0.82),
+          ),
+        ],
+      ),
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.all(horizontalPadding),
         child: Flex(
           direction: isDesktop ? Axis.horizontal : Axis.vertical,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
               width: isDesktop ? 390 : double.infinity,
-              padding: const EdgeInsets.all(24),
+              padding: EdgeInsets.all(cardPadding),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: colorScheme.surface,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
+                border: Border.all(
+                  color: isDark
+                      ? const Color(0xFF334155)
+                      : const Color(0xFFE2E8F0),
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1246,9 +1485,13 @@ class _MetricasScreenState extends State<MetricasScreen> {
                     color: Color(0xFF2563EB),
                   ),
                   const SizedBox(height: 16),
-                  const Text(
+                  Text(
                     "Dados do grafico",
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: colorScheme.onSurface,
+                    ),
                   ),
                   const SizedBox(height: 24),
                   DropdownButtonFormField<String>(
@@ -1280,6 +1523,25 @@ class _MetricasScreenState extends State<MetricasScreen> {
                     onChanged: (val) =>
                         setState(() => _metricaSelecionada = val),
                   ),
+                  if (_usaMetricaSecundaria &&
+                      metricaSecundariaPadrao.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      value: met2,
+                      decoration: const InputDecoration(
+                        labelText: "Segunda metrica",
+                        helperText:
+                            "Usada para empilhar, comparar ou desenhar a linha.",
+                      ),
+                      items: metricaSecundariaPadrao
+                          .map(
+                            (m) => DropdownMenuItem(value: m, child: Text(m)),
+                          )
+                          .toList(),
+                      onChanged: (val) =>
+                          setState(() => _metricaSecundariaSelecionada = val),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   OutlinedButton.icon(
                     onPressed: _abrirPainelDeEdicao,
@@ -1290,95 +1552,7 @@ class _MetricasScreenState extends State<MetricasScreen> {
               ),
             ),
             SizedBox(width: isDesktop ? 32 : 0, height: isDesktop ? 0 : 24),
-            Expanded(
-              flex: isDesktop ? 1 : 0,
-              child: Container(
-                constraints: const BoxConstraints(minHeight: 460),
-                decoration: BoxDecoration(
-                  color: _corFundo,
-                  borderRadius: BorderRadius.circular(_raioBorda),
-                  border: Border.all(
-                    color: const Color(0xFFE2E8F0),
-                    width: _borderWidth,
-                  ),
-                  boxShadow: _mostrarSombra
-                      ? const [
-                          BoxShadow(
-                            color: Colors.black12,
-                            blurRadius: 10,
-                            offset: Offset(0, 4),
-                          ),
-                        ]
-                      : [],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              configPreview.titulo,
-                              textAlign: alignPreview,
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: _fontSizeTitulo,
-                                color: _corTextoTitulo,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          TextButton.icon(
-                            onPressed: _abrirPainelDeEdicao,
-                            icon: const Icon(Icons.brush, size: 16),
-                            label: const Text("Editar"),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Divider(height: 1),
-                    SizedBox(
-                      height: 310,
-                      child: Padding(
-                        padding: EdgeInsets.all(_contentPadding),
-                        child: ChartRenderer(config: configPreview),
-                      ),
-                    ),
-                    const Divider(height: 1),
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          DashboardManager.graficosAtivos.add(
-                            configPreview
-                              ..id = DateTime.now().millisecondsSinceEpoch
-                                  .toString(),
-                          );
-                          DashboardManager.dadosFonteAtual = widget.data;
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) =>
-                                  const DashboardCanvasScreen(),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.check),
-                        label: const Text(
-                          "Adicionar ao Dashboard",
-                          style: TextStyle(fontSize: 16),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: const Size(double.infinity, 50),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            if (isDesktop) Expanded(child: previewCard) else previewCard,
           ],
         ),
       ),
