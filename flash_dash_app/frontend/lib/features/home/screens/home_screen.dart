@@ -1,7 +1,10 @@
-import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'dart:math' as math;
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+
 import '../../upload/screens/upload_screen.dart';
 import '../../dashboard/dashboard_manager.dart';
 import '../../dashboard/screens/dashboard_canvas_screen.dart';
@@ -15,6 +18,165 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _indiceSelecionado = 0;
+  final _perfilFormKey = GlobalKey<FormState>();
+  final _nomePerfilController = TextEditingController();
+  final _idadePerfilController = TextEditingController();
+  final _telefonePerfilController = TextEditingController();
+  final _cargoPerfilController = TextEditingController();
+  final _empresaPerfilController = TextEditingController();
+  final _bioPerfilController = TextEditingController();
+
+  bool _perfilCarregando = false;
+  bool _perfilSalvando = false;
+  bool _perfilEditando = false;
+  String? _fotoPerfil;
+
+  String get _baseUrl => 'http://127.0.0.1:8000';
+
+  @override
+  void initState() {
+    super.initState();
+    _preencherPerfilLocal();
+    _buscarPerfil();
+  }
+
+  @override
+  void dispose() {
+    _nomePerfilController.dispose();
+    _idadePerfilController.dispose();
+    _telefonePerfilController.dispose();
+    _cargoPerfilController.dispose();
+    _empresaPerfilController.dispose();
+    _bioPerfilController.dispose();
+    super.dispose();
+  }
+
+  void _preencherPerfilLocal() {
+    _nomePerfilController.text = DashboardManager.usuarioAtualNome ?? '';
+    _idadePerfilController.text =
+        DashboardManager.usuarioAtualIdade?.toString() ?? '';
+    _telefonePerfilController.text =
+        DashboardManager.usuarioAtualTelefone ?? '';
+    _cargoPerfilController.text = DashboardManager.usuarioAtualCargo ?? '';
+    _empresaPerfilController.text = DashboardManager.usuarioAtualEmpresa ?? '';
+    _bioPerfilController.text = DashboardManager.usuarioAtualBio ?? '';
+    _fotoPerfil = DashboardManager.usuarioAtualFoto;
+  }
+
+  void _aplicarUsuario(Map<String, dynamic> usuario) {
+    DashboardManager.usuarioAtualId = usuario['id']?.toString();
+    DashboardManager.usuarioAtualNome = usuario['nome']?.toString();
+    DashboardManager.usuarioAtualEmail = usuario['email']?.toString();
+    DashboardManager.usuarioAtualIdade = usuario['idade'] is int
+        ? usuario['idade'] as int
+        : int.tryParse(usuario['idade']?.toString() ?? '');
+    DashboardManager.usuarioAtualTelefone = usuario['telefone']?.toString();
+    DashboardManager.usuarioAtualCargo = usuario['cargo']?.toString();
+    DashboardManager.usuarioAtualEmpresa = usuario['empresa']?.toString();
+    DashboardManager.usuarioAtualBio = usuario['bio']?.toString();
+    DashboardManager.usuarioAtualFoto = usuario['foto_url']?.toString();
+    _preencherPerfilLocal();
+  }
+
+  Future<void> _buscarPerfil() async {
+    final usuarioId = DashboardManager.usuarioAtualId;
+    if (usuarioId == null || usuarioId.isEmpty) return;
+
+    setState(() => _perfilCarregando = true);
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/auth/perfil/$usuarioId'),
+      );
+      if (!mounted) return;
+      if (response.statusCode == 200) {
+        final data = json.decode(utf8.decode(response.bodyBytes));
+        final usuario = data['usuario'];
+        if (usuario is Map<String, dynamic>) {
+          setState(() => _aplicarUsuario(usuario));
+        }
+      }
+    } catch (e) {
+      debugPrint('Erro ao buscar perfil: $e');
+    } finally {
+      if (mounted) setState(() => _perfilCarregando = false);
+    }
+  }
+
+  Future<void> _selecionarFotoPerfil() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      withData: true,
+    );
+    if (result == null || result.files.single.bytes == null) return;
+
+    final bytes = result.files.single.bytes!;
+    final extensao = result.files.single.extension?.toLowerCase();
+    final mimeType = extensao == 'png'
+        ? 'image/png'
+        : extensao == 'webp'
+        ? 'image/webp'
+        : 'image/jpeg';
+    setState(() {
+      _fotoPerfil = 'data:$mimeType;base64,${base64Encode(bytes)}';
+      _perfilEditando = true;
+    });
+  }
+
+  Future<void> _salvarPerfil() async {
+    if (!_perfilFormKey.currentState!.validate()) return;
+
+    final usuarioId = DashboardManager.usuarioAtualId;
+    if (usuarioId == null || usuarioId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Usuario nao encontrado para salvar.')),
+      );
+      return;
+    }
+
+    setState(() => _perfilSalvando = true);
+    try {
+      final idadeTexto = _idadePerfilController.text.trim();
+      final response = await http.put(
+        Uri.parse('$_baseUrl/auth/perfil/$usuarioId'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'nome': _nomePerfilController.text.trim(),
+          'idade': idadeTexto.isEmpty ? null : int.tryParse(idadeTexto),
+          'telefone': _telefonePerfilController.text.trim(),
+          'cargo': _cargoPerfilController.text.trim(),
+          'empresa': _empresaPerfilController.text.trim(),
+          'bio': _bioPerfilController.text.trim(),
+          'foto_url': _fotoPerfil,
+        }),
+      );
+
+      if (!mounted) return;
+      final data = json.decode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200) {
+        final usuario = data['usuario'];
+        if (usuario is Map<String, dynamic>) {
+          setState(() {
+            _aplicarUsuario(usuario);
+            _perfilEditando = false;
+          });
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Perfil atualizado com sucesso.')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['detail'] ?? 'Erro ao salvar perfil.')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Erro ao salvar perfil: $e')));
+    } finally {
+      if (mounted) setState(() => _perfilSalvando = false);
+    }
+  }
 
   // ==========================================
   // BUSCA OS DASHBOARDS DO BACKEND (SUPABASE)
@@ -56,6 +218,32 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const UploadScreen()),
+    );
+  }
+
+  Widget _buildFotoPerfil(double radius) {
+    final foto = _fotoPerfil;
+    ImageProvider? imageProvider;
+
+    if (foto != null && foto.isNotEmpty) {
+      if (foto.startsWith('data:image')) {
+        try {
+          imageProvider = MemoryImage(base64Decode(foto.split(',').last));
+        } catch (_) {
+          imageProvider = null;
+        }
+      } else {
+        imageProvider = NetworkImage(foto);
+      }
+    }
+
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: const Color(0xFFEFF6FF),
+      backgroundImage: imageProvider,
+      child: imageProvider == null
+          ? Icon(Icons.person, color: const Color(0xFF2563EB), size: radius)
+          : null,
     );
   }
 
@@ -103,8 +291,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(height: 16),
           _buildMenuItem(Icons.dashboard_rounded, "Dashboards", 0),
-          _buildMenuItem(Icons.source_rounded, "Fontes de Dados", 1),
-          _buildMenuItem(Icons.receipt_long_rounded, "Logs ETL", 2),
+          _buildMenuItem(Icons.receipt_long_rounded, "Logs ETL", 1),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
             child: Text(
@@ -116,34 +303,40 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
-          _buildMenuItem(Icons.settings_suggest_rounded, "ConfiguraÃ§Ãµes", 3),
-          _buildMenuItem(Icons.person_outline_rounded, "Perfil", 4),
+          _buildMenuItem(Icons.settings_suggest_rounded, "Configuracoes", 2),
+          _buildMenuItem(Icons.person_outline_rounded, "Perfil", 3),
           const Spacer(),
           const Divider(height: 1),
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Row(
               children: [
-                CircleAvatar(
-                  backgroundColor: Colors.blue.shade50,
-                  child: const Icon(Icons.person, color: Color(0xFF2563EB)),
-                ),
+                _buildFotoPerfil(20),
                 const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      DashboardManager.usuarioAtualNome ?? "Flash Dash",
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        DashboardManager.usuarioAtualNome ?? "Flash Dash",
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                    const Text(
-                      "Workspace BI",
-                      style: TextStyle(fontSize: 12, color: Colors.blueGrey),
-                    ),
-                  ],
+                      Text(
+                        DashboardManager.usuarioAtualCargo ?? "Workspace BI",
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.blueGrey,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -216,15 +409,10 @@ class _HomeScreenState extends State<HomeScreen> {
             child: _indiceSelecionado == 0
                 ? _buildTelaDashboards(isDesktop, paddingGlobal)
                 : _indiceSelecionado == 1
-                ? _buildTelaFontesDeDados(isDesktop, paddingGlobal)
-                : _indiceSelecionado == 2
                 ? _buildTelaLogsETL(isDesktop, paddingGlobal)
-                : const Center(
-                    child: Text(
-                      "Tela em construÃ§Ã£o...",
-                      style: TextStyle(color: Colors.blueGrey, fontSize: 18),
-                    ),
-                  ),
+                : _indiceSelecionado == 2
+                ? _buildTelaConfiguracoes(isDesktop, paddingGlobal)
+                : _buildTelaPerfil(isDesktop, paddingGlobal),
           ),
         ],
       ),
@@ -579,6 +767,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // ==========================================
   // ABA 1: TELA DAS FONTES DE DADOS
   // ==========================================
+  // ignore: unused_element
   Widget _buildTelaFontesDeDados(bool isDesktop, double paddingGlobal) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -910,6 +1099,402 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildTelaConfiguracoes(bool isDesktop, double paddingGlobal) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildCabecalhoSecao(
+          titulo: 'Configuracoes',
+          subtitulo: 'Preferencias gerais do workspace',
+          paddingGlobal: paddingGlobal,
+          isDesktop: isDesktop,
+        ),
+        Expanded(
+          child: ListView(
+            padding: EdgeInsets.all(paddingGlobal),
+            children: [
+              _buildPainel(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Workspace',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    SwitchListTile(
+                      value: true,
+                      onChanged: (_) {},
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Salvar dashboards na nuvem'),
+                      subtitle: const Text(
+                        'Mantem seus dashboards vinculados ao usuario atual.',
+                      ),
+                    ),
+                    SwitchListTile(
+                      value: true,
+                      onChanged: (_) {},
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Mostrar pre-visualizacao na home'),
+                      subtitle: const Text(
+                        'Usa a composicao real dos graficos como capa.',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTelaPerfil(bool isDesktop, double paddingGlobal) {
+    final larguraCampo = isDesktop ? 320.0 : double.infinity;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildCabecalhoSecao(
+          titulo: 'Perfil',
+          subtitulo: 'Dados pessoais e identidade do workspace',
+          paddingGlobal: paddingGlobal,
+          isDesktop: isDesktop,
+          acao: _perfilEditando
+              ? Row(
+                  children: [
+                    TextButton(
+                      onPressed: _perfilSalvando
+                          ? null
+                          : () {
+                              setState(() {
+                                _perfilEditando = false;
+                                _preencherPerfilLocal();
+                              });
+                            },
+                      child: const Text('Cancelar'),
+                    ),
+                    const SizedBox(width: 12),
+                    ElevatedButton.icon(
+                      onPressed: _perfilSalvando ? null : _salvarPerfil,
+                      icon: _perfilSalvando
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.save_outlined),
+                      label: const Text('Salvar'),
+                    ),
+                  ],
+                )
+              : ElevatedButton.icon(
+                  onPressed: () => setState(() => _perfilEditando = true),
+                  icon: const Icon(Icons.edit_outlined),
+                  label: const Text('Editar perfil'),
+                ),
+        ),
+        Expanded(
+          child: _perfilCarregando
+              ? const Center(child: CircularProgressIndicator())
+              : SingleChildScrollView(
+                  padding: EdgeInsets.all(paddingGlobal),
+                  child: Form(
+                    key: _perfilFormKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildPainel(
+                          child: Flex(
+                            direction: isDesktop
+                                ? Axis.horizontal
+                                : Axis.vertical,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Column(
+                                children: [
+                                  _buildFotoPerfil(isDesktop ? 58 : 48),
+                                  const SizedBox(height: 16),
+                                  OutlinedButton.icon(
+                                    onPressed: _selecionarFotoPerfil,
+                                    icon: const Icon(
+                                      Icons.add_photo_alternate_outlined,
+                                    ),
+                                    label: const Text('Alterar foto'),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(width: isDesktop ? 36 : 0, height: 24),
+                              Expanded(
+                                flex: isDesktop ? 1 : 0,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Wrap(
+                                      spacing: 18,
+                                      runSpacing: 18,
+                                      children: [
+                                        _buildCampoPerfil(
+                                          controller: _nomePerfilController,
+                                          label: 'Nome',
+                                          icon: Icons.badge_outlined,
+                                          largura: larguraCampo,
+                                          obrigatorio: true,
+                                        ),
+                                        _buildCampoPerfil(
+                                          initialValue:
+                                              DashboardManager
+                                                  .usuarioAtualEmail ??
+                                              '',
+                                          label: 'E-mail',
+                                          icon: Icons.email_outlined,
+                                          largura: larguraCampo,
+                                          editavel: false,
+                                        ),
+                                        _buildCampoPerfil(
+                                          controller: _idadePerfilController,
+                                          label: 'Idade',
+                                          icon: Icons.cake_outlined,
+                                          largura: larguraCampo,
+                                          teclado: TextInputType.number,
+                                          validaNumero: true,
+                                        ),
+                                        _buildCampoPerfil(
+                                          controller: _telefonePerfilController,
+                                          label: 'Telefone',
+                                          icon: Icons.phone_outlined,
+                                          largura: larguraCampo,
+                                        ),
+                                        _buildCampoPerfil(
+                                          controller: _cargoPerfilController,
+                                          label: 'Cargo',
+                                          icon: Icons.work_outline,
+                                          largura: larguraCampo,
+                                        ),
+                                        _buildCampoPerfil(
+                                          controller: _empresaPerfilController,
+                                          label: 'Empresa',
+                                          icon: Icons.business_outlined,
+                                          largura: larguraCampo,
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 18),
+                                    _buildCampoPerfil(
+                                      controller: _bioPerfilController,
+                                      label: 'Bio',
+                                      icon: Icons.notes_outlined,
+                                      largura: isDesktop
+                                          ? 658
+                                          : double.infinity,
+                                      maxLines: 4,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Wrap(
+                          spacing: 16,
+                          runSpacing: 16,
+                          children: [
+                            _buildResumoPerfil(
+                              icone: Icons.dashboard_customize_outlined,
+                              titulo: 'Dashboards',
+                              valor:
+                                  '${DashboardManager.dashboardsSalvos.length}',
+                            ),
+                            _buildResumoPerfil(
+                              icone: Icons.table_chart_outlined,
+                              titulo: 'Fontes na sessao',
+                              valor: '${DashboardManager.fontesSalvas.length}',
+                            ),
+                            _buildResumoPerfil(
+                              icone: Icons.verified_user_outlined,
+                              titulo: 'Conta',
+                              valor: DashboardManager.usuarioAtualId == null
+                                  ? 'Local'
+                                  : 'Conectada',
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCabecalhoSecao({
+    required String titulo,
+    required String subtitulo,
+    required double paddingGlobal,
+    required bool isDesktop,
+    Widget? acao,
+  }) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: paddingGlobal,
+        vertical: isDesktop ? 24 : 16,
+      ),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  titulo,
+                  style: TextStyle(
+                    fontSize: isDesktop ? 28 : 20,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitulo,
+                  style: const TextStyle(color: Color(0xFF64748B)),
+                ),
+              ],
+            ),
+          ),
+          if (acao != null) acao,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPainel({required Widget child}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+
+  Widget _buildCampoPerfil({
+    TextEditingController? controller,
+    String? initialValue,
+    required String label,
+    required IconData icon,
+    required double largura,
+    bool editavel = true,
+    bool obrigatorio = false,
+    bool validaNumero = false,
+    int maxLines = 1,
+    TextInputType? teclado,
+  }) {
+    return SizedBox(
+      width: largura,
+      child: TextFormField(
+        controller: controller,
+        initialValue: controller == null ? initialValue : null,
+        enabled: editavel && _perfilEditando,
+        maxLines: maxLines,
+        keyboardType: teclado,
+        validator: (value) {
+          final texto = value?.trim() ?? '';
+          if (obrigatorio && texto.length < 2)
+            return 'Informe ao menos 2 letras';
+          if (validaNumero && texto.isNotEmpty) {
+            final idade = int.tryParse(texto);
+            if (idade == null || idade < 0 || idade > 130) {
+              return 'Informe uma idade valida';
+            }
+          }
+          return null;
+        },
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: Icon(icon),
+          filled: true,
+          fillColor: _perfilEditando && editavel
+              ? Colors.white
+              : const Color(0xFFF8FAFC),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResumoPerfil({
+    required IconData icone,
+    required String titulo,
+    required String valor,
+  }) {
+    return SizedBox(
+      width: 220,
+      child: _buildPainel(
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icone, color: const Color(0xFF2563EB)),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    titulo,
+                    style: const TextStyle(
+                      color: Color(0xFF64748B),
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    valor,
+                    style: const TextStyle(
+                      color: Color(0xFF0F172A),
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

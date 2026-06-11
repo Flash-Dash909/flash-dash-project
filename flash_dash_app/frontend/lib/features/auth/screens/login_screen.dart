@@ -82,6 +82,21 @@ class _LoginScreenState extends State<LoginScreen> {
           DashboardManager.usuarioAtualNome =
               data['usuario_nome']?.toString() ??
               data['usuario']?['nome']?.toString();
+          DashboardManager.usuarioAtualEmail = data['usuario']?['email']
+              ?.toString();
+          DashboardManager.usuarioAtualIdade = data['usuario']?['idade'] is int
+              ? data['usuario']['idade'] as int
+              : int.tryParse(data['usuario']?['idade']?.toString() ?? '');
+          DashboardManager.usuarioAtualTelefone = data['usuario']?['telefone']
+              ?.toString();
+          DashboardManager.usuarioAtualCargo = data['usuario']?['cargo']
+              ?.toString();
+          DashboardManager.usuarioAtualEmpresa = data['usuario']?['empresa']
+              ?.toString();
+          DashboardManager.usuarioAtualBio = data['usuario']?['bio']
+              ?.toString();
+          DashboardManager.usuarioAtualFoto = data['usuario']?['foto_url']
+              ?.toString();
 
           if (!mounted) return;
           Navigator.pushReplacement(

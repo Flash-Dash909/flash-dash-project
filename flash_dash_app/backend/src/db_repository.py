@@ -52,6 +52,58 @@ def buscar_usuario_por_email(email):
         print(f"--- Erro ao buscar usuario: {e}")
         return None
 
+def buscar_usuario_por_id(usuario_id):
+    try:
+        resposta = (
+            supabase_db.table("usuarios")
+            .select("*")
+            .eq("id", usuario_id)
+            .limit(1)
+            .execute()
+        )
+        if resposta.data:
+            usuario = resposta.data[0]
+            usuario.pop("senha_hash", None)
+            return usuario
+        return None
+    except Exception as e:
+        print(f"--- Erro ao buscar usuario por id: {e}")
+        return None
+
+def atualizar_usuario(usuario_id, dados):
+    try:
+        campos_permitidos = {
+            "nome",
+            "idade",
+            "telefone",
+            "cargo",
+            "empresa",
+            "bio",
+            "foto_url",
+        }
+        payload = {
+            chave: valor
+            for chave, valor in dados.items()
+            if chave in campos_permitidos
+        }
+        if not payload:
+            return buscar_usuario_por_id(usuario_id)
+
+        resposta = (
+            supabase_db.table("usuarios")
+            .update(payload)
+            .eq("id", usuario_id)
+            .execute()
+        )
+        if resposta.data:
+            usuario = resposta.data[0]
+            usuario.pop("senha_hash", None)
+            return usuario
+        return buscar_usuario_por_id(usuario_id)
+    except Exception as e:
+        print(f"--- Erro ao atualizar usuario: {e}")
+        return None
+
 def criar_usuario(nome, email, senha):
     try:
         novo_usuario = {

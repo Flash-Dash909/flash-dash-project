@@ -3,7 +3,13 @@ from pydantic import BaseModel
 import re
 import secrets
 
-from db_repository import buscar_usuario_por_email, criar_usuario, verificar_senha
+from db_repository import (
+    atualizar_usuario,
+    buscar_usuario_por_email,
+    buscar_usuario_por_id,
+    criar_usuario,
+    verificar_senha,
+)
 
 router = APIRouter()
 
@@ -19,6 +25,16 @@ class CadastroPayload(BaseModel):
     senha: str
 
 
+class PerfilPayload(BaseModel):
+    nome: str | None = None
+    idade: int | None = None
+    telefone: str | None = None
+    cargo: str | None = None
+    empresa: str | None = None
+    bio: str | None = None
+    foto_url: str | None = None
+
+
 def _validar_email(email):
     return re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email.strip()) is not None
 
@@ -28,6 +44,12 @@ def _usuario_publico(usuario):
         "id": usuario.get("id"),
         "nome": usuario.get("nome"),
         "email": usuario.get("email"),
+        "idade": usuario.get("idade"),
+        "telefone": usuario.get("telefone"),
+        "cargo": usuario.get("cargo"),
+        "empresa": usuario.get("empresa"),
+        "bio": usuario.get("bio"),
+        "foto_url": usuario.get("foto_url"),
     }
 
 
@@ -77,4 +99,30 @@ async def fazer_login(payload: LoginPayload):
         "usuario_id": usuario.get("id"),
         "usuario_nome": usuario.get("nome"),
         "token": secrets.token_urlsafe(32),
+    }
+
+
+@router.get("/perfil/{usuario_id}")
+async def obter_perfil(usuario_id: str):
+    usuario = buscar_usuario_por_id(usuario_id)
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario nao encontrado")
+    return {"status": "success", "usuario": _usuario_publico(usuario)}
+
+
+@router.put("/perfil/{usuario_id}")
+async def salvar_perfil(usuario_id: str, payload: PerfilPayload):
+    dados = payload.model_dump(exclude_unset=True)
+    if "nome" in dados and dados["nome"] is not None and len(dados["nome"].strip()) < 2:
+        raise HTTPException(status_code=400, detail="Informe um nome valido")
+    if "idade" in dados and dados["idade"] is not None and (dados["idade"] < 0 or dados["idade"] > 130):
+        raise HTTPException(status_code=400, detail="Informe uma idade valida")
+
+    usuario = atualizar_usuario(usuario_id, dados)
+    if not usuario:
+        raise HTTPException(status_code=500, detail="Nao foi possivel atualizar o perfil")
+    return {
+        "status": "success",
+        "mensagem": "Perfil atualizado com sucesso",
+        "usuario": _usuario_publico(usuario),
     }

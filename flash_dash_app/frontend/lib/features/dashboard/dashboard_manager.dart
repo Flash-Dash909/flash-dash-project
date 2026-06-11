@@ -68,4 +68,11 @@ class DashboardManager {
   static String? dashboardAtualId;
   static String? usuarioAtualId;
   static String? usuarioAtualNome;
+  static String? usuarioAtualEmail;
+  static int? usuarioAtualIdade;
+  static String? usuarioAtualTelefone;
+  static String? usuarioAtualCargo;
+  static String? usuarioAtualEmpresa;
+  static String? usuarioAtualBio;
+  static String? usuarioAtualFoto;
 }
