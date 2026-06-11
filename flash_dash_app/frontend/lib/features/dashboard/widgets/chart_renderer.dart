@@ -76,6 +76,27 @@ class _ChartPainter extends CustomPainter {
     return value is bool ? value : fallback;
   }
 
+  Color _corMetricaPrincipal([Color fallback = const Color(0xFF2563EB)]) {
+    return _converterCor(
+      config.configExtra['corMetricaPrincipal'] ??
+          config.configExtra['barColor'] ??
+          config.configExtra['lineColor'] ??
+          config.configExtra['corPrincipal'],
+      fallback,
+    );
+  }
+
+  Color _corMetricaSecundaria([Color fallback = const Color(0xFFF59E0B)]) {
+    return _converterCor(
+      config.configExtra['corMetricaSecundaria'] ??
+          config.configExtra['stackColor'],
+      fallback,
+    );
+  }
+
+  bool get _usarCorPorMetrica =>
+      config.configExtra['metricColorMode'] == 'metrica';
+
   String _formatarNumero(double valor) {
     if (valor.abs() >= 1000000)
       return '${(valor / 1000000).toStringAsFixed(1)}M';
@@ -299,11 +320,8 @@ class _ChartPainter extends CustomPainter {
         final top = rect.top + i * (barHeight + gap);
         final barRect = Rect.fromLTWH(rect.left, top, largura, barHeight);
         final barColorMode = config.configExtra['barColorMode'] ?? 'categoria';
-        final corBarra = barColorMode == 'unica'
-            ? _converterCor(
-                config.configExtra['barColor'],
-                const Color(0xFF2563EB),
-              )
+        final corBarra = barColorMode == 'unica' || _usarCorPorMetrica
+            ? _corMetricaPrincipal()
             : _converterCor(item['color']);
         canvas.drawRRect(
           RRect.fromRectAndRadius(barRect, const Radius.circular(5)),
@@ -352,11 +370,8 @@ class _ChartPainter extends CustomPainter {
         altura,
       );
       final barColorMode = config.configExtra['barColorMode'] ?? 'categoria';
-      final corBarra = barColorMode == 'unica'
-          ? _converterCor(
-              config.configExtra['barColor'],
-              const Color(0xFF2563EB),
-            )
+      final corBarra = barColorMode == 'unica' || _usarCorPorMetrica
+          ? _corMetricaPrincipal()
           : _converterCor(item['color']);
       canvas.drawRRect(
         RRect.fromRectAndRadius(barRect, const Radius.circular(5)),
@@ -409,14 +424,8 @@ class _ChartPainter extends CustomPainter {
     if (quantidade == 0) return;
     final maxValor = percentual ? 1.0 : _maxValorEmpilhado(dados);
     _desenharGrade(canvas, rect, percentual ? 100 : maxValor);
-    final primaryColor = _converterCor(
-      config.configExtra['barColor'],
-      const Color(0xFF2563EB),
-    );
-    final secondaryColor = _converterCor(
-      config.configExtra['stackColor'],
-      const Color(0xFFF59E0B),
-    );
+    final primaryColor = _corMetricaPrincipal();
+    final secondaryColor = _corMetricaSecundaria();
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
 
     if (horizontal) {
@@ -536,17 +545,14 @@ class _ChartPainter extends CustomPainter {
         ..close();
       canvas.drawPath(
         areaPath,
-        Paint()..color = const Color(0xFF2563EB).withValues(alpha: 0.18),
+        Paint()..color = _corMetricaPrincipal().withValues(alpha: 0.18),
       );
     }
 
     canvas.drawPath(
       path,
       Paint()
-        ..color = _converterCor(
-          config.configExtra['lineColor'],
-          const Color(0xFF2563EB),
-        )
+        ..color = _corMetricaPrincipal()
         ..strokeWidth = (config.configExtra['espessuraLinha'] ?? 3.0).toDouble()
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round,
@@ -560,8 +566,9 @@ class _ChartPainter extends CustomPainter {
           _numExtra('markerSize', 4),
           Paint()
             ..color = _converterCor(
-              config.configExtra['markerColor'],
-              const Color(0xFF2563EB),
+              config.configExtra['markerColor'] ??
+                  config.configExtra['corMetricaPrincipal'],
+              _corMetricaPrincipal(),
             ),
         );
         if (config.mostrarValores) {
@@ -623,16 +630,16 @@ class _ChartPainter extends CustomPainter {
 
     canvas.drawPath(
       area1,
-      Paint()..color = const Color(0xFF2563EB).withValues(alpha: 0.35),
+      Paint()..color = _corMetricaPrincipal().withValues(alpha: 0.35),
     );
     canvas.drawPath(
       area2,
-      Paint()..color = const Color(0xFFF59E0B).withValues(alpha: 0.42),
+      Paint()..color = _corMetricaSecundaria().withValues(alpha: 0.42),
     );
     canvas.drawPath(
       Path()..addPolygon(pontosTopo, false),
       Paint()
-        ..color = const Color(0xFFF59E0B)
+        ..color = _corMetricaSecundaria()
         ..strokeWidth = 2
         ..style = PaintingStyle.stroke,
     );
@@ -658,7 +665,9 @@ class _ChartPainter extends CustomPainter {
         5,
         Paint()
           ..color = _converterCor(
-            dados[i]['color'],
+            _usarCorPorMetrica
+                ? config.configExtra['corMetricaPrincipal']
+                : dados[i]['color'],
             const Color(0xFFEF4444),
           ).withValues(alpha: 0.85),
       );
@@ -758,7 +767,9 @@ class _ChartPainter extends CustomPainter {
         true,
         Paint()
           ..color = _converterCor(
-            item['color'],
+            _usarCorPorMetrica
+                ? config.configExtra['corMetricaPrincipal']
+                : item['color'],
           ).withValues(alpha: _numExtra('sliceOpacity', 1.0)),
       );
       if (config.mostrarValores && sweep > 0.22) {
@@ -826,10 +837,7 @@ class _ChartPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.butt;
     final valuePaint = Paint()
-      ..color = _converterCor(
-        config.configExtra['corPrincipal'],
-        const Color(0xFF2563EB),
-      )
+      ..color = _corMetricaPrincipal()
       ..strokeWidth = backgroundPaint.strokeWidth
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.butt;
@@ -1130,7 +1138,7 @@ class _ChartPainter extends CustomPainter {
       final isPositive = end >= start;
       final isLast = i == dados.length - 1;
       final color = isLast
-          ? const Color(0xFF2563EB)
+          ? _corMetricaPrincipal()
           : isPositive
           ? const Color(0xFF10B981)
           : const Color(0xFFEF4444);
@@ -1197,7 +1205,7 @@ class _ChartPainter extends CustomPainter {
       );
       canvas.drawRRect(
         RRect.fromRectAndRadius(bar, const Radius.circular(3)),
-        Paint()..color = const Color(0xFF7C3AED).withValues(alpha: 0.86),
+        Paint()..color = _corMetricaPrincipal().withValues(alpha: 0.86),
       );
     }
   }
@@ -1244,10 +1252,10 @@ class _ChartPainter extends CustomPainter {
       yFor(q1),
     );
     final paint = Paint()
-      ..color = const Color(0xFF2563EB).withValues(alpha: 0.22)
+      ..color = _corMetricaPrincipal().withValues(alpha: 0.22)
       ..style = PaintingStyle.fill;
     final stroke = Paint()
-      ..color = const Color(0xFF2563EB)
+      ..color = _corMetricaPrincipal()
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
 
@@ -1398,7 +1406,7 @@ class _ChartPainter extends CustomPainter {
         ),
         const Radius.circular(8),
       ),
-      Paint()..color = const Color(0xFF2563EB),
+      Paint()..color = _corMetricaPrincipal(),
     );
     final metaX = track.left + track.width * (meta / maxValor).clamp(0.0, 1.0);
     canvas.drawLine(
@@ -1450,7 +1458,8 @@ class _ChartPainter extends CustomPainter {
       mostrarRotulos: false,
       mostrarEixos: false,
       configExtra: {
-        'lineColor': const Color(0xFFEF4444).value.toString(),
+        'corMetricaPrincipal': _corMetricaSecundaria().value.toString(),
+        'lineColor': _corMetricaSecundaria().value.toString(),
         'mostrarPontos': true,
       },
     );
@@ -2032,7 +2041,8 @@ class _ProgressBarVisual extends StatelessWidget {
         .clamp(1.0, double.infinity);
     final progress = (value / meta).clamp(0.0, 1.0);
     final color = _visualColor(
-      config.configExtra['corPrincipal'],
+      config.configExtra['corMetricaPrincipal'] ??
+          config.configExtra['corPrincipal'],
       const Color(0xFF10B981),
     );
 
@@ -2241,6 +2251,11 @@ class _CartaoKpiVisual extends StatelessWidget {
       config.configExtra['kpiMetaColor'],
       const Color(0xFF10B981),
     );
+    final valueColor = _visualColor(
+      config.configExtra['corMetricaPrincipal'] ??
+          config.configExtra['corPrincipal'],
+      config.corTextoTitulo,
+    );
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -2262,7 +2277,7 @@ class _CartaoKpiVisual extends StatelessWidget {
                       textAlign: TextAlign.center,
                       maxLines: 1,
                       style: TextStyle(
-                        color: config.corTextoTitulo,
+                        color: valueColor,
                         fontSize: configuredSize.clamp(18.0, maxNumberSize),
                         fontWeight: FontWeight.w700,
                       ),

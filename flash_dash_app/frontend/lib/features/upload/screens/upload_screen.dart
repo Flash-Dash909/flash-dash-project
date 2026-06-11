@@ -123,14 +123,6 @@ class _UploadScreenState extends State<UploadScreen> {
       "url": true,
     },
     {
-      "nome": "Power BI",
-      "descricao": "Export CSV/XLSX",
-      "icone": Icons.analytics_rounded,
-      "cor": const Color(0xFFF2C811),
-      "tipo": "powerbi_export",
-      "extensoes": ["csv", "xlsx", "json"],
-    },
-    {
       "nome": "HubSpot",
       "descricao": "Export CSV",
       "icone": Icons.handshake_rounded,

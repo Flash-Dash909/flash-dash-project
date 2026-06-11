@@ -68,6 +68,10 @@ class _MetricasScreenState extends State<MetricasScreen> {
   int _kpiDecimais = 0;
   double _kpiFontSize = 44.0;
   Color _corPrincipal = const Color(0xFF2563EB);
+  Color _corMetricaPrincipal = const Color(0xFF2563EB);
+  Color _corMetricaSecundaria = const Color(0xFFF59E0B);
+  String _modoCorMetrica = 'categoria';
+  String _escalaMetricaSecundaria = 'mesma';
   Color _headerTabela = const Color(0xFF1D4ED8);
   Color _totalTabela = const Color(0xFFFDE047);
   Color _rowTabelaA = Colors.white;
@@ -85,7 +89,6 @@ class _MetricasScreenState extends State<MetricasScreen> {
   double _barOpacity = 1.0;
   double _barBorderWidth = 0.0;
   String _barColorMode = 'categoria';
-  Color _lineColor = const Color(0xFF2563EB);
   double _markerSize = 4.0;
   double _sliceOpacity = 1.0;
   bool _gaugeRanges = false;
@@ -313,6 +316,12 @@ class _MetricasScreenState extends State<MetricasScreen> {
         'decimais': _kpiDecimais,
         'kpiFontSize': _kpiFontSize,
         'corPrincipal': _corPrincipal.value.toString(),
+        'corMetricaPrincipal': _corMetricaPrincipal.value.toString(),
+        'corMetricaSecundaria': _corMetricaSecundaria.value.toString(),
+        'metricColorMode': _modoCorMetrica,
+        'secondaryScaleMode': _escalaMetricaSecundaria,
+        'barColor': _corMetricaPrincipal.value.toString(),
+        'stackColor': _corMetricaSecundaria.value.toString(),
         'corMeta': const Color(0xFFEF4444).value.toString(),
         'headerColor': _headerTabela.value.toString(),
         'totalColor': _totalTabela.value.toString(),
@@ -331,7 +340,8 @@ class _MetricasScreenState extends State<MetricasScreen> {
         'barOpacity': _barOpacity,
         'barBorderWidth': _barBorderWidth,
         'barColorMode': _barColorMode,
-        'lineColor': _lineColor.value.toString(),
+        'lineColor': _corMetricaPrincipal.value.toString(),
+        'markerColor': _corMetricaPrincipal.value.toString(),
         'markerSize': _markerSize,
         'sliceOpacity': _sliceOpacity,
         'gaugeMostrarFaixas': _gaugeRanges,
@@ -706,6 +716,60 @@ class _MetricasScreenState extends State<MetricasScreen> {
                                 'linear',
                                 'log',
                               ], (_) {}),
+                            ]),
+                          if (!_isTabela && !_isSegmentacao)
+                            _secao("Cores das metricas", [
+                              if (!_isKpi &&
+                                  !_isGauge &&
+                                  !_usaMetricaSecundaria)
+                                _dropdown(
+                                  "Aplicar cores",
+                                  _modoCorMetrica,
+                                  ['categoria', 'metrica'],
+                                  (v) =>
+                                      setModalState(() => _modoCorMetrica = v),
+                                ),
+                              _cores(
+                                "Metrica principal",
+                                _corMetricaPrincipal,
+                                [
+                                  const Color(0xFF2563EB),
+                                  const Color(0xFF10B981),
+                                  const Color(0xFFF59E0B),
+                                  const Color(0xFFEF4444),
+                                  const Color(0xFF8B5CF6),
+                                  const Color(0xFF14B8A6),
+                                ],
+                                (c) => setModalState(() {
+                                  _corMetricaPrincipal = c;
+                                  _corPrincipal = c;
+                                }),
+                              ),
+                              if (_usaMetricaSecundaria)
+                                _cores(
+                                  "Metrica secundaria",
+                                  _corMetricaSecundaria,
+                                  [
+                                    const Color(0xFFF59E0B),
+                                    const Color(0xFFEF4444),
+                                    const Color(0xFF10B981),
+                                    const Color(0xFF8B5CF6),
+                                    const Color(0xFF14B8A6),
+                                    const Color(0xFF64748B),
+                                  ],
+                                  (c) => setModalState(
+                                    () => _corMetricaSecundaria = c,
+                                  ),
+                                ),
+                              if (_usaMetricaSecundaria)
+                                _dropdown(
+                                  "Escala da segunda metrica",
+                                  _escalaMetricaSecundaria,
+                                  ['mesma', 'independente'],
+                                  (v) => setModalState(
+                                    () => _escalaMetricaSecundaria = v,
+                                  ),
+                                ),
                             ]),
                           if (_isLinhaOuArea)
                             _secao("Linha e area", [

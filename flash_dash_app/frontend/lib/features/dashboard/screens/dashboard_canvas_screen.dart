@@ -721,6 +721,22 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
       config.configExtra['corPrincipal'],
       const Color(0xFF2563EB),
     );
+    var tempCorMetricaPrincipal = _corConfig(
+      config.configExtra['corMetricaPrincipal'] ??
+          config.configExtra['barColor'] ??
+          config.configExtra['lineColor'] ??
+          config.configExtra['corPrincipal'],
+      const Color(0xFF2563EB),
+    );
+    var tempCorMetricaSecundaria = _corConfig(
+      config.configExtra['corMetricaSecundaria'] ??
+          config.configExtra['stackColor'],
+      const Color(0xFFF59E0B),
+    );
+    var tempMetricColorMode =
+        config.configExtra['metricColorMode']?.toString() ?? 'categoria';
+    var tempSecondaryScaleMode =
+        config.configExtra['secondaryScaleMode']?.toString() ?? 'mesma';
     var tempHeaderTabela = _corConfig(
       config.configExtra['headerColor'],
       const Color(0xFF1D4ED8),
@@ -775,6 +791,11 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
         .toDouble();
     final usaLegenda = _tipoUsaLegenda(config.tipo);
     final tipoLower = config.tipo.toLowerCase();
+    final usaMetricaSecundaria =
+        tipoLower.contains('empilh') ||
+        tipoLower.contains('100%') ||
+        tipoLower.contains('combo') ||
+        config.dados.any((item) => item.containsKey('value2'));
     final usaEixos =
         tipoLower.contains('barra') ||
         tipoLower.contains('coluna') ||
@@ -1243,6 +1264,109 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                               onChanged: (v) =>
                                   setModalState(() => tempMostrarEixos = v),
                             ),
+                          if (!tipoLower.contains('tabela') &&
+                              !tipoLower.contains('matriz') &&
+                              !tipoLower.contains('segment')) ...[
+                            const Divider(height: 32),
+                            const Text(
+                              "Cores das metricas",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blueGrey,
+                              ),
+                            ),
+                            if (!usaMetricaSecundaria)
+                              DropdownButtonFormField<String>(
+                                value: tempMetricColorMode,
+                                decoration: const InputDecoration(
+                                  labelText: "Aplicar cores",
+                                ),
+                                items: const [
+                                  DropdownMenuItem(
+                                    value: 'categoria',
+                                    child: Text("Por categoria"),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'metrica',
+                                    child: Text("Por metrica"),
+                                  ),
+                                ],
+                                onChanged: (v) => setModalState(
+                                  () => tempMetricColorMode = v ?? 'categoria',
+                                ),
+                              ),
+                            const SizedBox(height: 8),
+                            const Text("Metrica principal"),
+                            Wrap(
+                              spacing: 12,
+                              children:
+                                  [
+                                        const Color(0xFF2563EB),
+                                        const Color(0xFF10B981),
+                                        const Color(0xFFF59E0B),
+                                        const Color(0xFFEF4444),
+                                        const Color(0xFF8B5CF6),
+                                        const Color(0xFF14B8A6),
+                                      ]
+                                      .map(
+                                        (cor) => _botaoCor(
+                                          tempCorMetricaPrincipal,
+                                          cor,
+                                          setModalState,
+                                          (c) {
+                                            tempCorMetricaPrincipal = c;
+                                            tempCorPrincipal = c;
+                                            tempLineColor = c;
+                                          },
+                                        ),
+                                      )
+                                      .toList(),
+                            ),
+                            if (usaMetricaSecundaria) ...[
+                              const SizedBox(height: 12),
+                              const Text("Metrica secundaria"),
+                              Wrap(
+                                spacing: 12,
+                                children:
+                                    [
+                                          const Color(0xFFF59E0B),
+                                          const Color(0xFFEF4444),
+                                          const Color(0xFF10B981),
+                                          const Color(0xFF8B5CF6),
+                                          const Color(0xFF14B8A6),
+                                          const Color(0xFF64748B),
+                                        ]
+                                        .map(
+                                          (cor) => _botaoCor(
+                                            tempCorMetricaSecundaria,
+                                            cor,
+                                            setModalState,
+                                            (c) => tempCorMetricaSecundaria = c,
+                                          ),
+                                        )
+                                        .toList(),
+                              ),
+                              DropdownButtonFormField<String>(
+                                value: tempSecondaryScaleMode,
+                                decoration: const InputDecoration(
+                                  labelText: "Escala da segunda metrica",
+                                ),
+                                items: const [
+                                  DropdownMenuItem(
+                                    value: 'mesma',
+                                    child: Text("Mesma escala"),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'independente',
+                                    child: Text("Independente"),
+                                  ),
+                                ],
+                                onChanged: (v) => setModalState(
+                                  () => tempSecondaryScaleMode = v ?? 'mesma',
+                                ),
+                              ),
+                            ],
+                          ],
                           if (config.tipo.contains('Linha') ||
                               config.tipo.contains('Area') ||
                               config.tipo.contains('Área')) ...[
@@ -1951,6 +2075,20 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                             config.configExtra['kpiPrevious'] = tempKpiPrevious;
                             config.configExtra['corPrincipal'] =
                                 tempCorPrincipal.value.toString();
+                            config.configExtra['corMetricaPrincipal'] =
+                                tempCorMetricaPrincipal.value.toString();
+                            config.configExtra['corMetricaSecundaria'] =
+                                tempCorMetricaSecundaria.value.toString();
+                            config.configExtra['metricColorMode'] =
+                                tempMetricColorMode;
+                            config.configExtra['secondaryScaleMode'] =
+                                tempSecondaryScaleMode;
+                            config.configExtra['barColor'] =
+                                tempCorMetricaPrincipal.value.toString();
+                            config.configExtra['stackColor'] =
+                                tempCorMetricaSecundaria.value.toString();
+                            config.configExtra['markerColor'] =
+                                tempCorMetricaPrincipal.value.toString();
                             config.configExtra['headerColor'] = tempHeaderTabela
                                 .value
                                 .toString();
