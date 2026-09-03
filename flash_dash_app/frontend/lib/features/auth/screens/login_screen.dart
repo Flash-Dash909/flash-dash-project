@@ -355,16 +355,30 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 16),
 
                   // Renderização condicional do botão do Google (Oficial na Web, Customizado no Mobile)
+                  // Renderização condicional do botão do Google
                   if (kIsWeb)
                     SizedBox(
-                      height:
-                          44, // O renderButton tem uma altura padrão injetada pelo Google
-                      child:
-                          (GoogleSignInPlatform.instance
-                                  as web.GoogleSignInPlugin)
-                              .renderButton(),
+                      // A altura de 54 não afeta diretamente o iframe, mas reserva o espaço correto na tela
+                      height: 54,
+                      child: (GoogleSignInPlatform.instance as web.GoogleSignInPlugin)
+                          .renderButton(
+                            configuration: web.GSIButtonConfiguration(
+                              type: web.GSIButtonType.standard,
+                              theme: web.GSIButtonTheme.outline,
+                              size: web.GSIButtonSize.large,
+                              text: web
+                                  .GSIButtonText
+                                  .continueWith, // Muda o texto para "Continuar com o Google"
+                              shape: web
+                                  .GSIButtonShape
+                                  .rectangular, // Mantém um leve arredondamento
+                              minimumWidth:
+                                  430, // Força o iframe a esticar até o limite do seu container
+                            ),
+                          ),
                     )
                   else
+                    // O seu código do botão mobile continua exatamente igual
                     SizedBox(
                       height: 54,
                       child: OutlinedButton.icon(
