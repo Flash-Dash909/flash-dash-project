@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../../../core/app_theme_controller.dart';
+import '../../../core/calculated_metric.dart';
 import '../../../core/widgets/app_logo.dart';
 import '../../auth/screens/login_screen.dart';
 import '../../upload/screens/upload_screen.dart';
@@ -183,6 +184,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _logout() {
     DashboardManager.graficosAtivos.clear();
+    DashboardManager.metricasCalculadas.clear();
     DashboardManager.dashboardsSalvos.clear();
     DashboardManager.fontesSalvas.clear();
     DashboardManager.dadosFonteAtual = null;
@@ -240,6 +242,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _iniciarNovoDashboard() {
     DashboardManager.graficosAtivos.clear();
+    DashboardManager.metricasCalculadas.clear();
     DashboardManager.dashboardAtualId = null;
     Navigator.push(
       context,
@@ -645,8 +648,47 @@ class _HomeScreenState extends State<HomeScreen> {
       child: InkWell(
         onTap: () {
           DashboardManager.graficosAtivos.clear();
+          DashboardManager.metricasCalculadas.clear();
           DashboardManager.dashboardAtualId = dash['id']?.toString();
+
+          final metricasDoBanco = dash['metricas_calculadas'];
+          if (metricasDoBanco is List) {
+            for (final raw in metricasDoBanco) {
+              final metric = CalculatedMetric.fromJson(raw);
+              if (metric != null) {
+                DashboardManager.metricasCalculadas[metric.name] = metric;
+              }
+            }
+          }
+
+          if (DashboardManager.metricasCalculadas.isEmpty) {
+            for (final item in configDoBanco) {
+              final extra = item['config_extra'];
+              final metricasDoGrafico = extra is Map
+                  ? extra['calculatedMetrics']
+                  : null;
+              if (metricasDoGrafico is List) {
+                for (final raw in metricasDoGrafico) {
+                  final metric = CalculatedMetric.fromJson(raw);
+                  if (metric != null) {
+                    DashboardManager.metricasCalculadas[metric.name] = metric;
+                  }
+                }
+              }
+            }
+          }
+
           for (var item in configDoBanco) {
+            final extraConfig = item['config_extra'] != null
+                ? Map<String, dynamic>.from(item['config_extra'])
+                : <String, dynamic>{};
+            extraConfig.putIfAbsent(
+              'calculatedMetrics',
+              () => DashboardManager.metricasCalculadas.values
+                  .map((metric) => metric.toJson())
+                  .toList(),
+            );
+
             DashboardManager.graficosAtivos.add(
               ChartConfig(
                 id:
@@ -670,9 +712,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     : Colors.white,
                 mostrarLegenda: item['mostrar_legenda'] ?? true,
                 posicaoLegenda: item['posicao_legenda'] ?? 'bottom',
-                configExtra: item['config_extra'] != null
-                    ? Map<String, dynamic>.from(item['config_extra'])
-                    : {},
+                configExtra: extraConfig,
                 fontSizeTitulo: (item['font_size_titulo'] ?? 14.0).toDouble(),
                 alinhamentoTitulo: item['alinhamento_titulo'] ?? 'left',
                 corTextoTitulo: item['cor_texto_titulo'] != null

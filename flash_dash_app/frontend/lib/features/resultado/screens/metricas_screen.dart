@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/calculated_metric.dart';
+import '../../../core/visual_config.dart';
 import '../../../core/widgets/app_logo.dart';
 import '../../dashboard/dashboard_manager.dart';
 import '../../dashboard/screens/dashboard_canvas_screen.dart';
 import '../../dashboard/widgets/chart_renderer.dart';
+import '../../dashboard/widgets/power_bi_format_panel.dart';
 
 class MetricasScreen extends StatefulWidget {
   final Map<String, dynamic> data;
@@ -21,8 +24,10 @@ class MetricasScreen extends StatefulWidget {
 
 class _MetricasScreenState extends State<MetricasScreen> {
   String? _dimensaoSelecionada;
+  String? _dimensaoSecundariaSelecionada;
   String? _metricaSelecionada;
   String? _metricaSecundariaSelecionada;
+  final Map<String, CalculatedMetric> _metricasCalculadas = {};
   String _agregacao = 'Soma';
   int _limiteItens = 8;
   bool _ordenarDesc = true;
@@ -109,6 +114,7 @@ class _MetricasScreenState extends State<MetricasScreen> {
   bool _exportCsv = true;
   bool _exportExcel = false;
   String _themePreset = 'manual';
+  late Map<String, dynamic> _powerBiConfig;
 
   List<dynamic> get _dadosBrutos =>
       widget.data['dados_brutos'] ??
@@ -129,7 +135,14 @@ class _MetricasScreenState extends State<MetricasScreen> {
       widget.tipoGrafico.contains('Empilhada') ||
       widget.tipoGrafico.contains('Empilhadas') ||
       widget.tipoGrafico.contains('100%') ||
-      widget.tipoGrafico.contains('Combo');
+      widget.tipoGrafico.contains('Combo') ||
+      widget.tipoGrafico.contains('Barra') ||
+      widget.tipoGrafico.contains('Coluna') ||
+      widget.tipoGrafico.contains('Linha') ||
+      widget.tipoGrafico.contains('Area') ||
+      widget.tipoGrafico.contains('Dispers') ||
+      widget.tipoGrafico.contains('Radar') ||
+      widget.tipoGrafico.contains('Ribbon');
 
   bool get _isGauge => widget.tipoGrafico.contains('Gauge');
   bool get _isKpi =>
@@ -142,6 +155,13 @@ class _MetricasScreenState extends State<MetricasScreen> {
       widget.tipoGrafico.contains('Matriz');
   bool get _isSegmentacao => widget.tipoGrafico.contains('Segment');
   bool get _isTreemap => widget.tipoGrafico.contains('Treemap');
+  bool get _usaDimensaoSecundaria =>
+      widget.tipoGrafico.contains('Matriz') ||
+      widget.tipoGrafico.contains('Treemap') ||
+      widget.tipoGrafico.contains('Sankey') ||
+      widget.tipoGrafico.contains('Network') ||
+      widget.tipoGrafico.contains('Decomposition') ||
+      widget.tipoGrafico.contains('Sunburst');
   bool get _isSemLegenda =>
       _isKpi ||
       _isTabela ||
@@ -158,7 +178,9 @@ class _MetricasScreenState extends State<MetricasScreen> {
       widget.tipoGrafico.contains('Timeline') ||
       widget.tipoGrafico.contains('Network') ||
       widget.tipoGrafico.contains('Decomposition') ||
-      widget.tipoGrafico.contains('Sunburst');
+      widget.tipoGrafico.contains('Sunburst') ||
+      widget.tipoGrafico.contains('Influenciadores') ||
+      widget.tipoGrafico.contains('Narrativa');
   bool get _usaLegenda => !_isSemLegenda;
   bool get _usaEixos =>
       widget.tipoGrafico.contains('Barra') ||
@@ -173,12 +195,75 @@ class _MetricasScreenState extends State<MetricasScreen> {
   void initState() {
     super.initState();
     _raioFuro = widget.tipoGrafico.contains('Rosca') ? 0.58 : 0.0;
+    _powerBiConfig = PowerBiVisualConfig.defaultsFor(widget.tipoGrafico);
+    _metricasCalculadas.addAll(DashboardManager.metricasCalculadas);
+  }
+
+  void _sincronizarPowerBiConfig(Map<String, dynamic> value) {
+    _powerBiConfig = Map<String, dynamic>.from(value);
+    double number(String key, double fallback) {
+      final raw = value[key];
+      return raw is num ? raw.toDouble() : fallback;
+    }
+
+    bool flag(String key, bool fallback) {
+      final raw = value[key];
+      return raw is bool ? raw : fallback;
+    }
+
+    Color color(String key, Color fallback) {
+      final raw = value[key];
+      if (raw is Color) return raw;
+      if (raw is int) return Color(raw);
+      if (raw is String) {
+        final parsed = raw.startsWith('#')
+            ? int.tryParse(raw.replaceFirst('#', '0xFF'))
+            : int.tryParse(raw);
+        if (parsed != null) return Color(parsed);
+      }
+      return fallback;
+    }
+
+    _barOpacity = number('barOpacity', _barOpacity);
+    _barGap = number('barGap', _barGap);
+    _barBorderWidth = number('barBorderWidth', _barBorderWidth);
+    _markerSize = number('markerSize', _markerSize);
+    _mostrarPontos = flag('markerVisible', _mostrarPontos);
+    _espessuraLinha = number('lineWidth', _espessuraLinha);
+    _sliceOpacity = number('sliceOpacity', _sliceOpacity);
+    _raioFuro = number('raioFuro', _raioFuro);
+    _gaugeMin = number('gaugeMin', _gaugeMin);
+    _gaugeMax = number('gaugeMax', _gaugeMax);
+    _gaugeMeta = number('gaugeMeta', _gaugeMeta);
+    _gaugeRanges = flag('gaugeMostrarFaixas', _gaugeRanges);
+    _kpiShowMeta = flag('kpiShowMeta', _kpiShowMeta);
+    _kpiMeta = number('kpiMeta', _kpiMeta);
+    _kpiShowTrend = flag('kpiShowTrend', _kpiShowTrend);
+    _kpiPrevious = number('kpiPrevious', _kpiPrevious);
+    _kpiFontSize = number('kpiFontSize', _kpiFontSize);
+    _headerTabela = color('headerColor', _headerTabela);
+    _rowTabelaA = color('rowColorA', _rowTabelaA);
+    _rowTabelaB = color('rowColorB', _rowTabelaB);
+    _gridTabela = color('gridColor', _gridTabela);
+    _rowHeight = number('rowHeight', _rowHeight);
+    _segmentacaoMultipla = flag('segmentacaoMultipla', _segmentacaoMultipla);
+    _slicerStyle = value['slicerStyle']?.toString() ?? _slicerStyle;
+    _slicerSearch = flag('slicerSearch', _slicerSearch);
+    _treemapSpacing = number('treemapSpacing', _treemapSpacing);
+    _tooltipEnabled = flag('tooltipEnabled', _tooltipEnabled);
+    _interactionFilter = flag('interactionFilter', _interactionFilter);
+    _interactionHighlight = flag('interactionHighlight', _interactionHighlight);
+    _interactionDrillthrough = flag(
+      'interactionDrillthrough',
+      _interactionDrillthrough,
+    );
   }
 
   List<Map<String, dynamic>> _calcularDadosDinamicos(
     String dimensao,
     String metrica, [
     String? metricaSecundaria,
+    String? dimensaoSecundaria,
   ]) {
     final dadosBrutos = _dadosBrutos;
     if (dadosBrutos.isEmpty) {
@@ -191,20 +276,31 @@ class _MetricasScreenState extends State<MetricasScreen> {
 
     final agrupamento = <String, List<double>>{};
     final agrupamentoSecundario = <String, List<double>>{};
+    final labelsPrimarios = <String, String>{};
+    final labelsSecundarios = <String, String>{};
     for (final linha in dadosBrutos) {
-      final chave = linha[dimensao]?.toString().trim().isNotEmpty == true
+      final labelPrimario =
+          linha[dimensao]?.toString().trim().isNotEmpty == true
           ? linha[dimensao].toString()
           : "Desconhecido";
-      final raw = linha[metrica];
-      final valor = raw is num
-          ? raw.toDouble()
-          : double.tryParse(raw.toString().replaceAll(',', '.')) ?? 0.0;
+      final labelSecundario = dimensaoSecundaria != null
+          ? (linha[dimensaoSecundaria]?.toString().trim().isNotEmpty == true
+                ? linha[dimensaoSecundaria].toString()
+                : 'Sem detalhe')
+          : '';
+      final chave = dimensaoSecundaria == null
+          ? labelPrimario
+          : '$labelPrimario\u001F$labelSecundario';
+      labelsPrimarios[chave] = labelPrimario;
+      labelsSecundarios[chave] = labelSecundario;
+      final valor = linha is Map
+          ? resolveMetricValue(linha, metrica, _metricasCalculadas)
+          : 0.0;
       agrupamento.putIfAbsent(chave, () => []).add(valor);
       if (metricaSecundaria != null && metricaSecundaria.isNotEmpty) {
-        final raw2 = linha[metricaSecundaria];
-        final valor2 = raw2 is num
-            ? raw2.toDouble()
-            : double.tryParse(raw2.toString().replaceAll(',', '.')) ?? 0.0;
+        final valor2 = linha is Map
+            ? resolveMetricValue(linha, metricaSecundaria, _metricasCalculadas)
+            : 0.0;
         agrupamentoSecundario.putIfAbsent(chave, () => []).add(valor2);
       }
     }
@@ -243,22 +339,40 @@ class _MetricasScreenState extends State<MetricasScreen> {
             };
       final index = agrupamento.keys.toList().indexOf(entry.key);
       return {
-        "label": entry.key,
+        "label": labelsPrimarios[entry.key] ?? entry.key,
+        if ((labelsSecundarios[entry.key] ?? '').isNotEmpty)
+          "secondaryLabel": labelsSecundarios[entry.key],
         "value": valor,
         if (metricaSecundaria != null) "value2": valor2,
         "color": paleta[index % paleta.length],
       };
     }).toList();
 
+    final sortMode =
+        _powerBiConfig['categorySort']?.toString() ??
+        (_ordenarDesc ? 'valueDesc' : 'valueAsc');
     dados.sort((a, b) {
+      if (sortMode == 'categoryAsc' || sortMode == 'categoryDesc') {
+        final comparison = a['label'].toString().compareTo(
+          b['label'].toString(),
+        );
+        return sortMode == 'categoryDesc' ? -comparison : comparison;
+      }
       final valorA = (a['value'] as num).toDouble();
       final valorB = (b['value'] as num).toDouble();
-      return _ordenarDesc ? valorB.compareTo(valorA) : valorA.compareTo(valorB);
+      return sortMode == 'valueAsc'
+          ? valorA.compareTo(valorB)
+          : valorB.compareTo(valorA);
     });
     return dados.take(_limiteItens).toList();
   }
 
-  ChartConfig _criarConfigPreview(String dim, String met, [String? met2]) {
+  ChartConfig _criarConfigPreview(
+    String dim,
+    String met, [
+    String? met2,
+    String? dim2,
+  ]) {
     final titulo = _tituloPersonalizado.isEmpty
         ? met2 == null
               ? "$met por $dim"
@@ -270,7 +384,7 @@ class _MetricasScreenState extends State<MetricasScreen> {
       titulo: titulo,
       dimensao: dim,
       metrica: met,
-      dados: _calcularDadosDinamicos(dim, met, met2),
+      dados: _calcularDadosDinamicos(dim, met, met2, dim2),
       posicao: const Offset(50, 50),
       corFundo: _corFundo,
       fontSizeTitulo: _fontSizeTitulo,
@@ -284,8 +398,13 @@ class _MetricasScreenState extends State<MetricasScreen> {
       mostrarValores: _mostrarValores,
       mostrarRotulos: _mostrarRotulos,
       configExtra: {
+        ..._powerBiConfig,
         'agregacao': _agregacao,
+        'calculatedMetrics': _metricasCalculadas.values
+            .map((metric) => metric.toJson())
+            .toList(),
         if (met2 != null) 'metricaSecundaria': met2,
+        if (dim2 != null) 'dimensaoSecundaria': dim2,
         'limiteItens': _limiteItens,
         'ordenarDesc': _ordenarDesc,
         'mostrarPontos': _mostrarPontos,
@@ -1173,6 +1292,15 @@ class _MetricasScreenState extends State<MetricasScreen> {
                               (v) => setModalState(() => _themePreset = v),
                             ),
                           ]),
+                          _secao("Configuracao detalhada Power BI", [
+                            PowerBiFormatPanel(
+                              visualType: widget.tipoGrafico,
+                              value: _powerBiConfig,
+                              onChanged: (value) => setModalState(
+                                () => _sincronizarPowerBiConfig(value),
+                              ),
+                            ),
+                          ]),
                         ],
                       ),
                     ),
@@ -1383,14 +1511,259 @@ class _MetricasScreenState extends State<MetricasScreen> {
     );
   }
 
+  Future<void> _abrirCriadorDeMetrica(List<String> metricasBase) async {
+    final nomeController = TextEditingController();
+    final formulaController = TextEditingController();
+
+    void inserir(String texto) {
+      final atual = formulaController.text;
+      final selection = formulaController.selection;
+      final inicio = selection.isValid ? selection.start : atual.length;
+      final fim = selection.isValid ? selection.end : atual.length;
+      formulaController.text = atual.replaceRange(inicio, fim, texto);
+      final cursor = inicio + texto.length;
+      formulaController.selection = TextSelection.collapsed(offset: cursor);
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        final colorScheme = Theme.of(context).colorScheme;
+        final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+        final isCompact = MediaQuery.of(context).size.width < 640;
+        return Padding(
+          padding: EdgeInsets.only(bottom: bottomInset),
+          child: SizedBox(
+            height: MediaQuery.of(context).size.height * 0.86,
+            child: StatefulBuilder(
+              builder: (context, setModalState) {
+                return Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 18, 12, 8),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.calculate_rounded,
+                            color: Color(0xFF2563EB),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              "Criar metrica calculada",
+                              style: TextStyle(
+                                color: colorScheme.onSurface,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: EdgeInsets.all(isCompact ? 16 : 24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            TextField(
+                              controller: nomeController,
+                              decoration: const InputDecoration(
+                                labelText: "Nome da metrica",
+                                hintText: "Ex: Ticket medio",
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            TextField(
+                              controller: formulaController,
+                              minLines: 2,
+                              maxLines: 4,
+                              decoration: const InputDecoration(
+                                labelText: "Formula",
+                                hintText: "[Faturamento] / 2",
+                              ),
+                              onChanged: (_) => setModalState(() {}),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              "Metricas detectadas",
+                              style: TextStyle(
+                                color: colorScheme.onSurface,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: metricasBase.map((metrica) {
+                                return ActionChip(
+                                  avatar: const Icon(
+                                    Icons.data_array_rounded,
+                                    size: 16,
+                                  ),
+                                  label: Text(metrica),
+                                  onPressed: () => setModalState(
+                                    () => inserir("[$metrica]"),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                            const SizedBox(height: 18),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children:
+                                  [
+                                    '+',
+                                    '-',
+                                    '*',
+                                    '/',
+                                    '(',
+                                    ')',
+                                    '0',
+                                    '1',
+                                    '2',
+                                    '3',
+                                    '4',
+                                    '5',
+                                    '6',
+                                    '7',
+                                    '8',
+                                    '9',
+                                    '.',
+                                  ].map((key) {
+                                    return SizedBox(
+                                      width: 52,
+                                      height: 44,
+                                      child: OutlinedButton(
+                                        onPressed: () =>
+                                            setModalState(() => inserir(key)),
+                                        child: Text(key),
+                                      ),
+                                    );
+                                  }).toList(),
+                            ),
+                            const SizedBox(height: 12),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                OutlinedButton.icon(
+                                  onPressed: () => setModalState(() {
+                                    final text = formulaController.text;
+                                    if (text.isNotEmpty) {
+                                      formulaController.text = text.substring(
+                                        0,
+                                        text.length - 1,
+                                      );
+                                      formulaController
+                                          .selection = TextSelection.collapsed(
+                                        offset: formulaController.text.length,
+                                      );
+                                    }
+                                  }),
+                                  icon: const Icon(Icons.backspace_outlined),
+                                  label: const Text("Apagar"),
+                                ),
+                                OutlinedButton.icon(
+                                  onPressed: () => setModalState(
+                                    () => formulaController.clear(),
+                                  ),
+                                  icon: const Icon(Icons.cleaning_services),
+                                  label: const Text("Limpar"),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 18),
+                            Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: colorScheme.primary.withValues(
+                                  alpha: 0.08,
+                                ),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Text(
+                                "Exemplo: toque em Faturamento, depois /, depois 2. A metrica criada aparece na lista de metricas dos graficos.",
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.add),
+                          label: const Text("Salvar metrica"),
+                          onPressed: () {
+                            final nome = nomeController.text.trim();
+                            final formula = formulaController.text.trim();
+                            if (nome.isEmpty || formula.isEmpty) return;
+                            setState(() {
+                              _metricasCalculadas[nome] = CalculatedMetric(
+                                name: nome,
+                                formula: formula,
+                              );
+                              DashboardManager.metricasCalculadas =
+                                  Map<String, CalculatedMetric>.from(
+                                    _metricasCalculadas,
+                                  );
+                              _metricaSelecionada = nome;
+                            });
+                            Navigator.pop(context);
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+
+    nomeController.dispose();
+    formulaController.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final dimensoes = List<dynamic>.from(_summary['dimensoes'] ?? []);
-    final metricas = List<dynamic>.from(_summary['metricas'] ?? []);
+    final metricasBase = List<dynamic>.from(
+      _summary['metricas'] ?? [],
+    ).map((m) => m.toString()).toList();
+    final metricas = [...metricasBase, ..._metricasCalculadas.keys];
 
     final dim =
         _dimensaoSelecionada ??
         (dimensoes.isNotEmpty ? dimensoes[0].toString() : "Categoria");
+    final dimensoesSecundarias = dimensoes
+        .map((item) => item.toString())
+        .where((item) => item != dim)
+        .toList();
+    final dim2 = _usaDimensaoSecundaria && dimensoesSecundarias.isNotEmpty
+        ? (_dimensaoSecundariaSelecionada != null &&
+                  dimensoesSecundarias.contains(_dimensaoSecundariaSelecionada)
+              ? _dimensaoSecundariaSelecionada
+              : dimensoesSecundarias.first)
+        : null;
     final met =
         _metricaSelecionada ??
         (metricas.isNotEmpty ? metricas[0].toString() : "Valor");
@@ -1414,7 +1787,7 @@ class _MetricasScreenState extends State<MetricasScreen> {
           : "$met e $met2 por $dim";
     }
 
-    final configPreview = _criarConfigPreview(dim, met, met2);
+    final configPreview = _criarConfigPreview(dim, met, met2, dim2);
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
@@ -1572,6 +1945,29 @@ class _MetricasScreenState extends State<MetricasScreen> {
                     onChanged: (val) =>
                         setState(() => _dimensaoSelecionada = val),
                   ),
+                  if (_usaDimensaoSecundaria &&
+                      dimensoesSecundarias.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      initialValue: dim2,
+                      decoration: const InputDecoration(
+                        labelText: "Segunda dimensao",
+                        helperText:
+                            "Cria hierarquia, destino ou detalhamento do visual.",
+                      ),
+                      items: dimensoesSecundarias
+                          .map(
+                            (item) => DropdownMenuItem(
+                              value: item,
+                              child: Text(item),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) => setState(
+                        () => _dimensaoSecundariaSelecionada = value,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
                     value: metricas.contains(met) ? met : null,
@@ -1587,6 +1983,41 @@ class _MetricasScreenState extends State<MetricasScreen> {
                     onChanged: (val) =>
                         setState(() => _metricaSelecionada = val),
                   ),
+                  const SizedBox(height: 10),
+                  OutlinedButton.icon(
+                    onPressed: () => _abrirCriadorDeMetrica(metricasBase),
+                    icon: const Icon(Icons.calculate_rounded),
+                    label: const Text("Criar metrica calculada"),
+                  ),
+                  if (_metricasCalculadas.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _metricasCalculadas.values.map((metric) {
+                        return InputChip(
+                          avatar: const Icon(Icons.functions, size: 16),
+                          label: Text(metric.name),
+                          selected: _metricaSelecionada == metric.name,
+                          onPressed: () =>
+                              setState(() => _metricaSelecionada = metric.name),
+                          onDeleted: () => setState(() {
+                            _metricasCalculadas.remove(metric.name);
+                            DashboardManager.metricasCalculadas =
+                                Map<String, CalculatedMetric>.from(
+                                  _metricasCalculadas,
+                                );
+                            if (_metricaSelecionada == metric.name) {
+                              _metricaSelecionada = null;
+                            }
+                            if (_metricaSecundariaSelecionada == metric.name) {
+                              _metricaSecundariaSelecionada = null;
+                            }
+                          }),
+                        );
+                      }).toList(),
+                    ),
+                  ],
                   if (_usaMetricaSecundaria &&
                       metricaSecundariaPadrao.isNotEmpty) ...[
                     const SizedBox(height: 16),

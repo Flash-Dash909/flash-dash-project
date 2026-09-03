@@ -144,12 +144,13 @@ def save(dados_json, insight_texto, nome_arquivo="Upload_Manual.csv"):
         print(f"--- Erro ao salvar no banco Supabase: {e}")
         return False
     
-def save_dashboard(titulo, graficos_config, usuario_id=None):
+def save_dashboard(titulo, graficos_config, usuario_id=None, metricas_calculadas=None):
     try:
         novo_dashboard = {
             "titulo": titulo,
             "icone": "dashboard_customize",
             "graficos_config": graficos_config,
+            "metricas_calculadas": metricas_calculadas or [],
         }
         if usuario_id:
             novo_dashboard["usuario_id"] = usuario_id
@@ -158,6 +159,17 @@ def save_dashboard(titulo, graficos_config, usuario_id=None):
         print(f"--- Dashboard '{titulo}' salvo no Supabase com sucesso!")
         return True
     except Exception as e:
+        if "novo_dashboard" in locals() and "metricas_calculadas" in novo_dashboard:
+            try:
+                novo_dashboard.pop("metricas_calculadas", None)
+                supabase_db.table("dashboards").insert(novo_dashboard).execute()
+                print(
+                    "--- Dashboard salvo sem metricas_calculadas; "
+                    "adicione a coluna no Supabase para persistir as metricas."
+                )
+                return True
+            except Exception as retry_error:
+                print(f"--- Erro ao salvar dashboard sem metricas: {retry_error}")
         print(f"--- Erro ao salvar dashboard no Supabase: {e}")
         return False
 

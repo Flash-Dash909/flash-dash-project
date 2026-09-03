@@ -102,13 +102,19 @@ async def analisar_url(payload: UrlFontePayload):
 class DashboardPayload(BaseModel):
     titulo: str
     graficos_config: list
+    metricas_calculadas: list | None = None
     usuario_id: str | None = None
 
 # E crie a nova rota no final do arquivo:
 @app.post("/salvar-dashboard")
 async def salvar_dashboard_api(payload: DashboardPayload):
     # Passe o usuario_id para a função do banco
-    sucesso = save_dashboard(payload.titulo, payload.graficos_config, payload.usuario_id)
+    sucesso = save_dashboard(
+        payload.titulo,
+        payload.graficos_config,
+        payload.usuario_id,
+        payload.metricas_calculadas or [],
+    )
     if sucesso:
         return {"status": "success", "message": "Dashboard guardado na nuvem!"}
     else:

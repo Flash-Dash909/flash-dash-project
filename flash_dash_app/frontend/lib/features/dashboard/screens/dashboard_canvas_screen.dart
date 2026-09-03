@@ -2,9 +2,12 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
+import '../../../core/calculated_metric.dart';
+import '../../../core/visual_config.dart';
 import '../../../core/widgets/app_logo.dart';
 import '../dashboard_manager.dart';
 import '../widgets/chart_renderer.dart';
+import '../widgets/power_bi_format_panel.dart';
 import '../../home/screens/home_screen.dart';
 import '../../resultado/screens/selecao_grafico_screen.dart';
 import '../../upload/screens/upload_screen.dart';
@@ -22,6 +25,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
   final List<Map<String, String>> _mensagensChat = [];
   final TextEditingController _chatController = TextEditingController();
   final Map<String, Set<String>> _filtrosSegmentacao = {};
+  final Map<String, Set<String>> _selecoesVisuais = {};
   bool _isChatLoading = false;
   bool _modoApresentacao = false;
 
@@ -90,7 +94,10 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
     if (acao == 'editar') {
       _abrirConfiguracoesBottomSheet(config);
     } else if (acao == 'excluir') {
-      setState(() => DashboardManager.graficosAtivos.remove(config));
+      setState(() {
+        DashboardManager.graficosAtivos.remove(config);
+        _selecoesVisuais.remove(config.id);
+      });
     }
   }
 
@@ -150,7 +157,11 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                               .map(
                                 (d) => {
                                   "label": d["label"],
+                                  if (d.containsKey("secondaryLabel"))
+                                    "secondaryLabel": d["secondaryLabel"],
                                   "value": d["value"],
+                                  if (d.containsKey("value2"))
+                                    "value2": d["value2"],
                                   "color": d["color"] is Color
                                       ? (d["color"] as Color).value.toString()
                                       : d["color"].toString(),
@@ -184,12 +195,18 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                       body: json.encode({
                         "titulo": nomeController.text,
                         "graficos_config": configJson,
+                        "metricas_calculadas": DashboardManager
+                            .metricasCalculadas
+                            .values
+                            .map((metric) => metric.toJson())
+                            .toList(),
                         "usuario_id": DashboardManager.usuarioAtualId,
                       }),
                     );
 
                     if (response.statusCode == 200) {
                       DashboardManager.graficosAtivos.clear();
+                      DashboardManager.metricasCalculadas.clear();
                       Navigator.pop(dialogContext);
                       Navigator.pushAndRemoveUntil(
                         context,
@@ -218,6 +235,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
     final dashboardId = DashboardManager.dashboardAtualId;
     if (dashboardId == null) {
       DashboardManager.graficosAtivos.clear();
+      DashboardManager.metricasCalculadas.clear();
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,
@@ -255,6 +273,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
       if (!mounted) return;
       if (response.statusCode == 200) {
         DashboardManager.graficosAtivos.clear();
+        DashboardManager.metricasCalculadas.clear();
         DashboardManager.dashboardAtualId = null;
         Navigator.pushAndRemoveUntil(
           context,
@@ -453,6 +472,104 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
     setState(() {
       DashboardManager.graficosAtivos.remove(config);
       DashboardManager.graficosAtivos.add(config);
+    });
+  }
+
+  void _abrirVisualEmFoco(ChartConfig config) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        final size = MediaQuery.of(dialogContext).size;
+        return Dialog(
+          insetPadding: EdgeInsets.all(size.width < 700 ? 12 : 36),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 1100,
+              maxHeight: size.height * 0.9,
+            ),
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 12, 8, 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          config.titulo,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Fechar modo de foco',
+                        onPressed: () => Navigator.pop(dialogContext),
+                        icon: const Icon(Icons.close_fullscreen_rounded),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: _buildConteudoComLegenda(config),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _copiarCsvDoVisual(ChartConfig config) async {
+    final buffer = StringBuffer()
+      ..writeln(
+        '${config.dimensao},${config.metrica}${config.configExtra['metricaSecundaria'] != null ? ',${config.configExtra['metricaSecundaria']}' : ''}',
+      );
+    for (final item in _configVisual(config).dados) {
+      final label = item['label'].toString().replaceAll('"', '""');
+      buffer.write('"$label",${item['value']}');
+      if (item.containsKey('value2')) buffer.write(',${item['value2']}');
+      buffer.writeln();
+    }
+    await Clipboard.setData(ClipboardData(text: buffer.toString()));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Dados CSV copiados para a area de transferencia.'),
+      ),
+    );
+  }
+
+  void _alternarOrdenacaoVisual(ChartConfig config) {
+    setState(() {
+      final current =
+          config.configExtra['categorySort']?.toString() ?? 'valueDesc';
+      config.configExtra['categorySort'] = switch (current) {
+        'valueDesc' => 'valueAsc',
+        'valueAsc' => 'categoryAsc',
+        'categoryAsc' => 'categoryDesc',
+        _ => 'valueDesc',
+      };
+      final data = config.dados;
+      final mode = config.configExtra['categorySort'];
+      data.sort((a, b) {
+        if (mode == 'categoryAsc' || mode == 'categoryDesc') {
+          final comparison = a['label'].toString().compareTo(
+            b['label'].toString(),
+          );
+          return mode == 'categoryDesc' ? -comparison : comparison;
+        }
+        final aValue = ((a['value'] ?? 0) as num).toDouble();
+        final bValue = ((b['value'] ?? 0) as num).toDouble();
+        return mode == 'valueAsc'
+            ? aValue.compareTo(bValue)
+            : bValue.compareTo(aValue);
+      });
     });
   }
 
@@ -789,6 +906,68 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
     var tempKpiShowTrend = config.configExtra['kpiShowTrend'] as bool? ?? false;
     var tempKpiPrevious = ((config.configExtra['kpiPrevious'] ?? 0) as num)
         .toDouble();
+    var tempPowerBiConfig = PowerBiVisualConfig.merge(
+      config.tipo,
+      config.configExtra,
+    );
+
+    void sincronizarPowerBi(Map<String, dynamic> value) {
+      tempPowerBiConfig = Map<String, dynamic>.from(value);
+      double number(String key, double fallback) {
+        final raw = value[key];
+        return raw is num ? raw.toDouble() : fallback;
+      }
+
+      bool flag(String key, bool fallback) {
+        final raw = value[key];
+        return raw is bool ? raw : fallback;
+      }
+
+      Color color(String key, Color fallback) =>
+          _corConfig(value[key], fallback);
+
+      tempBarOpacity = number('barOpacity', tempBarOpacity);
+      tempBarGap = number('barGap', tempBarGap);
+      tempBarBorderWidth = number('barBorderWidth', tempBarBorderWidth);
+      tempMarkerSize = number('markerSize', tempMarkerSize);
+      tempMostrarPontos = flag('markerVisible', tempMostrarPontos);
+      tempEspessuraLinha = number('lineWidth', tempEspessuraLinha);
+      tempSliceOpacity = number('sliceOpacity', tempSliceOpacity);
+      tempRaioFuro = number('raioFuro', tempRaioFuro);
+      tempGaugeMin = number('gaugeMin', tempGaugeMin);
+      tempGaugeMax = number('gaugeMax', tempGaugeMax);
+      tempGaugeMeta = number('gaugeMeta', tempGaugeMeta);
+      tempGaugeRanges = flag('gaugeMostrarFaixas', tempGaugeRanges);
+      tempKpiShowMeta = flag('kpiShowMeta', tempKpiShowMeta);
+      tempKpiMeta = number('kpiMeta', tempKpiMeta);
+      tempKpiShowTrend = flag('kpiShowTrend', tempKpiShowTrend);
+      tempKpiPrevious = number('kpiPrevious', tempKpiPrevious);
+      tempKpiFontSize = number('kpiFontSize', tempKpiFontSize);
+      tempHeaderTabela = color('headerColor', tempHeaderTabela);
+      tempRowColorA = color('rowColorA', tempRowColorA);
+      tempRowColorB = color('rowColorB', tempRowColorB);
+      tempGridColor = color('gridColor', tempGridColor);
+      tempRowHeight = number('rowHeight', tempRowHeight);
+      tempSegmentacaoMultipla = flag(
+        'segmentacaoMultipla',
+        tempSegmentacaoMultipla,
+      );
+      tempSlicerStyle = value['slicerStyle']?.toString() ?? tempSlicerStyle;
+      tempSlicerSearch = flag('slicerSearch', tempSlicerSearch);
+      tempTreemapSpacing = number('treemapSpacing', tempTreemapSpacing);
+      tempTooltipAtivo = flag('tooltipEnabled', tempTooltipAtivo);
+      tempInteracaoFiltrar = flag('interactionFilter', tempInteracaoFiltrar);
+      tempInteracaoDestacar = flag(
+        'interactionHighlight',
+        tempInteracaoDestacar,
+      );
+      tempDrillthrough = flag('interactionDrillthrough', tempDrillthrough);
+      tempAnimationEntrada =
+          value['animationIn']?.toString() ?? tempAnimationEntrada;
+      tempAnimationUpdate =
+          value['animationUpdate']?.toString() ?? tempAnimationUpdate;
+    }
+
     final usaLegenda = _tipoUsaLegenda(config.tipo);
     final tipoLower = config.tipo.toLowerCase();
     final usaMetricaSecundaria =
@@ -1987,6 +2166,22 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                               ),
                             ],
                           ),
+                          const Divider(height: 32),
+                          const Text(
+                            "Configuracao detalhada Power BI",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          PowerBiFormatPanel(
+                            visualType: config.tipo,
+                            value: tempPowerBiConfig,
+                            onChanged: (value) =>
+                                setModalState(() => sincronizarPowerBi(value)),
+                          ),
                         ],
                       ),
                     ),
@@ -1998,6 +2193,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                       child: ElevatedButton(
                         onPressed: () {
                           setState(() {
+                            config.configExtra.addAll(tempPowerBiConfig);
                             config.titulo = tituloController.text;
                             config.mostrarLegenda = tempMostrarLegenda;
                             config.mostrarValores = tempMostrarValores;
@@ -2198,7 +2394,8 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
 
   List<Map<String, dynamic>> _calcularDadosFiltrados(ChartConfig config) {
     final dadosBrutos = _dadosBrutosAtuais;
-    if (dadosBrutos.isEmpty || _filtrosSegmentacao.isEmpty) {
+    if (dadosBrutos.isEmpty ||
+        (_filtrosSegmentacao.isEmpty && _selecoesVisuais.isEmpty)) {
       return config.dados;
     }
 
@@ -2209,20 +2406,70 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
         final valor = linha[filtro.key]?.toString() ?? '';
         if (!filtro.value.contains(valor)) return false;
       }
+      for (final selection in _selecoesVisuais.entries) {
+        if (selection.key == config.id || selection.value.isEmpty) continue;
+        ChartConfig? source;
+        for (final chart in DashboardManager.graficosAtivos) {
+          if (chart.id == selection.key) {
+            source = chart;
+            break;
+          }
+        }
+        if (source == null) continue;
+        final value = linha[source.dimensao]?.toString() ?? '';
+        if (!selection.value.contains(value)) return false;
+      }
       return true;
     });
 
     final agrupamento = <String, List<double>>{};
+    final agrupamentoSecundario = <String, List<double>>{};
+    final labelsPrimarios = <String, String>{};
+    final labelsSecundarios = <String, String>{};
+    final metricasCalculadas = <String, CalculatedMetric>{
+      ...DashboardManager.metricasCalculadas,
+    };
+    final rawCalculated = config.configExtra['calculatedMetrics'];
+    if (rawCalculated is List) {
+      for (final item in rawCalculated) {
+        final metric = CalculatedMetric.fromJson(item);
+        if (metric != null) metricasCalculadas[metric.name] = metric;
+      }
+    }
+    final metricaSecundaria = config.configExtra['metricaSecundaria']
+        ?.toString();
+    final dimensaoSecundaria = config.configExtra['dimensaoSecundaria']
+        ?.toString();
     for (final linha in linhasFiltradas) {
       if (linha is! Map) continue;
-      final chave = linha[config.dimensao]?.toString().trim().isNotEmpty == true
+      final labelPrimario =
+          linha[config.dimensao]?.toString().trim().isNotEmpty == true
           ? linha[config.dimensao].toString()
           : 'Desconhecido';
-      final raw = linha[config.metrica];
-      final valor = raw is num
-          ? raw.toDouble()
-          : double.tryParse(raw.toString().replaceAll(',', '.')) ?? 0.0;
+      final labelSecundario = dimensaoSecundaria != null
+          ? (linha[dimensaoSecundaria]?.toString().trim().isNotEmpty == true
+                ? linha[dimensaoSecundaria].toString()
+                : 'Sem detalhe')
+          : '';
+      final chave = dimensaoSecundaria == null
+          ? labelPrimario
+          : '$labelPrimario\u001F$labelSecundario';
+      labelsPrimarios[chave] = labelPrimario;
+      labelsSecundarios[chave] = labelSecundario;
+      final valor = resolveMetricValue(
+        linha,
+        config.metrica,
+        metricasCalculadas,
+      );
       agrupamento.putIfAbsent(chave, () => []).add(valor);
+      if (metricaSecundaria != null && metricaSecundaria.isNotEmpty) {
+        final valor2 = resolveMetricValue(
+          linha,
+          metricaSecundaria,
+          metricasCalculadas,
+        );
+        agrupamentoSecundario.putIfAbsent(chave, () => []).add(valor2);
+      }
     }
 
     final paleta = [
@@ -2252,18 +2499,44 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
         'Minimo' => valores.reduce((a, b) => a < b ? a : b),
         _ => soma,
       };
+      final valores2 = agrupamentoSecundario[entry.key] ?? const <double>[];
+      final soma2 = valores2.fold<double>(0, (total, valor) => total + valor);
+      final valor2 = valores2.isEmpty
+          ? 0.0
+          : switch (agregacao) {
+              'Media' => soma2 / valores2.length,
+              'Contagem' => valores2.length.toDouble(),
+              'Maximo' => valores2.reduce((a, b) => a > b ? a : b),
+              'Minimo' => valores2.reduce((a, b) => a < b ? a : b),
+              _ => soma2,
+            };
       final index = agrupamento.keys.toList().indexOf(entry.key);
       return {
-        'label': entry.key,
+        'label': labelsPrimarios[entry.key] ?? entry.key,
+        if ((labelsSecundarios[entry.key] ?? '').isNotEmpty)
+          'secondaryLabel': labelsSecundarios[entry.key],
         'value': valor,
+        if (metricaSecundaria != null && metricaSecundaria.isNotEmpty)
+          'value2': valor2,
         'color': paleta[index % paleta.length],
       };
     }).toList();
 
+    final sortMode =
+        config.configExtra['categorySort']?.toString() ??
+        (ordenarDesc ? 'valueDesc' : 'valueAsc');
     dados.sort((a, b) {
+      if (sortMode == 'categoryAsc' || sortMode == 'categoryDesc') {
+        final comparison = a['label'].toString().compareTo(
+          b['label'].toString(),
+        );
+        return sortMode == 'categoryDesc' ? -comparison : comparison;
+      }
       final valorA = (a['value'] as num).toDouble();
       final valorB = (b['value'] as num).toDouble();
-      return ordenarDesc ? valorB.compareTo(valorA) : valorA.compareTo(valorB);
+      return sortMode == 'valueAsc'
+          ? valorA.compareTo(valorB)
+          : valorB.compareTo(valorA);
     });
 
     return dados.take(limite <= 0 ? dados.length : limite).toList();
@@ -2273,6 +2546,13 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
     final tipo = config.tipo.toLowerCase();
     if (tipo.contains('segment')) return config;
     final dados = _calcularDadosFiltrados(config);
+    final extraConfig = Map<String, dynamic>.from(config.configExtra);
+    extraConfig.putIfAbsent(
+      'calculatedMetrics',
+      () => DashboardManager.metricasCalculadas.values
+          .map((metric) => metric.toJson())
+          .toList(),
+    );
     return ChartConfig(
       id: config.id,
       tipo: config.tipo,
@@ -2293,7 +2573,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
       posicaoLegenda: config.posicaoLegenda,
       mostrarValores: config.mostrarValores,
       mostrarRotulos: config.mostrarRotulos,
-      configExtra: Map<String, dynamic>.from(config.configExtra),
+      configExtra: extraConfig,
     );
   }
 
@@ -2304,7 +2584,9 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
         t.contains('tabela') ||
         t.contains('segment') ||
         t.contains('gauge') ||
-        t.contains('treemap'));
+        t.contains('treemap') ||
+        t.contains('influenciador') ||
+        t.contains('narrativa'));
   }
 
   Widget _buildConteudoComLegenda(ChartConfig config) {
@@ -2313,12 +2595,24 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
     Widget chartWidget = ChartRenderer(
       config: visualConfig,
       filtrosSelecionados: _filtrosSegmentacao[config.dimensao],
+      selecaoVisual: _selecoesVisuais[config.id],
       onSegmentacaoChanged: tipo.contains('segment')
           ? (selecionados) => setState(() {
               if (selecionados.isEmpty) {
                 _filtrosSegmentacao.remove(config.dimensao);
               } else {
                 _filtrosSegmentacao[config.dimensao] = selecionados;
+              }
+            })
+          : null,
+      onSelecaoVisualChanged:
+          !tipo.contains('segment') &&
+              (config.configExtra['interactionFilter'] as bool? ?? true)
+          ? (selecionados) => setState(() {
+              if (selecionados.isEmpty) {
+                _selecoesVisuais.remove(config.id);
+              } else {
+                _selecoesVisuais[config.id] = selecionados;
               }
             })
           : null,
@@ -2330,6 +2624,30 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
       return chartWidget;
     }
 
+    final usaSeriesDeMetricas =
+        visualConfig.dados.any((item) => item.containsKey('value2')) &&
+        (tipo.contains('barra') ||
+            tipo.contains('coluna') ||
+            tipo.contains('linha') ||
+            tipo.contains('area') ||
+            tipo.contains('combo') ||
+            tipo.contains('radar') ||
+            tipo.contains('ribbon'));
+    final itensLegenda = usaSeriesDeMetricas
+        ? <Map<String, dynamic>>[
+            {
+              'label': config.metrica,
+              'color': config.configExtra['corMetricaPrincipal'],
+            },
+            {
+              'label':
+                  config.configExtra['metricaSecundaria']?.toString() ??
+                  'Segunda metrica',
+              'color': config.configExtra['corMetricaSecundaria'],
+            },
+          ]
+        : visualConfig.dados;
+
     Widget legenda = Wrap(
       spacing: 8,
       runSpacing: 4,
@@ -2338,14 +2656,16 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
           (config.posicaoLegenda == 'left' || config.posicaoLegenda == 'right')
           ? Axis.vertical
           : Axis.horizontal,
-      children: visualConfig.dados
+      children: itensLegenda
           .map(
             (d) => Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 10,
-                  height: 10,
+                  width: ((config.configExtra['legendMarkerSize'] ?? 9) as num)
+                      .toDouble(),
+                  height: ((config.configExtra['legendMarkerSize'] ?? 9) as num)
+                      .toDouble(),
                   color: _converterCor(d['color']),
                   margin: const EdgeInsets.only(right: 4),
                 ),
@@ -2353,7 +2673,15 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                   d['label'].toString().length > 12
                       ? '${d['label'].toString().substring(0, 12)}...'
                       : d['label'].toString(),
-                  style: const TextStyle(fontSize: 10),
+                  style: TextStyle(
+                    fontSize:
+                        ((config.configExtra['legendFontSize'] ?? 10) as num)
+                            .toDouble(),
+                    color: _corConfig(
+                      config.configExtra['legendColor'],
+                      const Color(0xFF475569),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -2380,7 +2708,22 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                 config.posicaoLegenda == 'right')
             ? Axis.vertical
             : Axis.horizontal,
-        child: legenda,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if ((config.configExtra['legendTitle']?.toString() ?? '')
+                .isNotEmpty)
+              Text(
+                config.configExtra['legendTitle'].toString(),
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            legenda,
+          ],
+        ),
       ),
     );
 
@@ -2600,6 +2943,62 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                                   ),
                                 ),
                               ),
+                              if (!_modoApresentacao)
+                                PopupMenuButton<String>(
+                                  tooltip: 'Opcoes do visual',
+                                  padding: EdgeInsets.zero,
+                                  icon: const Icon(
+                                    Icons.more_horiz_rounded,
+                                    size: 19,
+                                  ),
+                                  onSelected: (action) {
+                                    if (action == 'focus') {
+                                      _abrirVisualEmFoco(config);
+                                    } else if (action == 'sort') {
+                                      _alternarOrdenacaoVisual(config);
+                                    } else if (action == 'csv') {
+                                      _copiarCsvDoVisual(config);
+                                    } else if (action == 'edit') {
+                                      _abrirConfiguracoesBottomSheet(config);
+                                    }
+                                  },
+                                  itemBuilder: (context) => const [
+                                    PopupMenuItem(
+                                      value: 'focus',
+                                      child: ListTile(
+                                        dense: true,
+                                        leading: Icon(
+                                          Icons.open_in_full_rounded,
+                                        ),
+                                        title: Text('Modo de foco'),
+                                      ),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'sort',
+                                      child: ListTile(
+                                        dense: true,
+                                        leading: Icon(Icons.sort_rounded),
+                                        title: Text('Alterar ordenacao'),
+                                      ),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'csv',
+                                      child: ListTile(
+                                        dense: true,
+                                        leading: Icon(Icons.download_rounded),
+                                        title: Text('Copiar CSV'),
+                                      ),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'edit',
+                                      child: ListTile(
+                                        dense: true,
+                                        leading: Icon(Icons.tune_rounded),
+                                        title: Text('Formatar visual'),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                             ],
                           ),
                         ),

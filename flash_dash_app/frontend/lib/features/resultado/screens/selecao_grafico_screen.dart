@@ -178,6 +178,11 @@ class SelecaoGraficoScreen extends StatelessWidget {
             Icons.align_vertical_bottom_rounded,
             const Color(0xFF0284C7),
           ),
+          item(
+            'Ribbon Chart',
+            Icons.swap_vert_circle_outlined,
+            Colors.indigo.shade500,
+          ),
         ],
       },
       {
@@ -269,12 +274,15 @@ class SelecaoGraficoScreen extends StatelessWidget {
         'categoria': 'Geografico',
         'icone': Icons.public_rounded,
         'itens': [
+          item('Azure Maps', Icons.location_on_outlined, Colors.cyan.shade700),
+          item('Mapa Basico', Icons.place_outlined, Colors.blue.shade700),
+          item('Mapa Preenchido', Icons.map_outlined, Colors.teal.shade700),
+          item('Shape Map', Icons.polyline_outlined, Colors.green.shade700),
           item(
-            'Mapa de Pontos',
-            Icons.location_on_outlined,
-            Colors.cyan.shade700,
+            'Mapa de Calor',
+            Icons.blur_on_rounded,
+            Colors.deepOrange.shade600,
           ),
-          item('Mapa Coropletico', Icons.map_outlined, Colors.teal.shade700),
         ],
       },
       {
@@ -286,6 +294,21 @@ class SelecaoGraficoScreen extends StatelessWidget {
             'Decomposition Tree',
             Icons.account_tree_rounded,
             Colors.indigo.shade700,
+          ),
+          item(
+            'Principais Influenciadores',
+            Icons.insights_rounded,
+            Colors.blue.shade800,
+          ),
+          item(
+            'Narrativa Inteligente',
+            Icons.article_outlined,
+            Colors.blueGrey.shade700,
+          ),
+          item(
+            'Deteccao de Anomalias',
+            Icons.notification_important_outlined,
+            Colors.red.shade600,
           ),
         ],
       },

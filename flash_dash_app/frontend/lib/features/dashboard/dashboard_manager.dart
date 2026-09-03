@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../core/calculated_metric.dart';
+import '../../core/visual_config.dart';
+
 class ChartConfig {
   String id;
   String tipo;
@@ -47,21 +50,12 @@ class ChartConfig {
     this.mostrarValores = true,
     this.mostrarRotulos = true,
     Map<String, dynamic>? configExtra,
-  }) : configExtra = configExtra ?? {} {
-    if (this.configExtra.isEmpty) {
-      if (tipo.contains('Pizza') || tipo.contains('Rosca')) {
-        this.configExtra = {
-          'raioFuro': tipo.contains('Rosca') ? 0.6 : 0.0,
-          'mostrarPorcentagem': false,
-          'espessuraFatia': 1.0,
-        };
-      }
-    }
-  }
+  }) : configExtra = PowerBiVisualConfig.merge(tipo, configExtra);
 }
 
 class DashboardManager {
   static List<ChartConfig> graficosAtivos = [];
+  static Map<String, CalculatedMetric> metricasCalculadas = {};
   static List<Map<String, dynamic>> dashboardsSalvos = [];
   static List<Map<String, String>> fontesSalvas = [];
   static Map<String, dynamic>? dadosFonteAtual;
