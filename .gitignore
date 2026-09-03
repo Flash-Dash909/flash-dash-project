@@ -25,3 +25,4 @@ flutter pub add fl_chart
 #412x891
 
 #uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! USAR ESSE flutter run -d chrome --web-port 3000

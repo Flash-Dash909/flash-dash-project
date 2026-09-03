@@ -5,12 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:google_sign_in_platform_interface/google_sign_in_platform_interface.dart';
+import 'package:google_sign_in_web/google_sign_in_web.dart' as web;
 
 import '../../../core/widgets/app_logo.dart';
 import '../../dashboard/dashboard_manager.dart';
 import '../../home/screens/home_screen.dart';
-
-
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -29,9 +29,30 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   bool _isLoginMode = true;
 
+  // Instância do GoogleSignIn movida para o nível da classe (sem escopos extras para não quebrar o idToken)
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    clientId:
+        '191150128104-28vgeh8p0pm3heti252b7e9t17c16km6.apps.googleusercontent.com',
+  );
+
   String get _baseUrl {
     if (!kIsWeb) return 'http://10.0.2.2:8000';
     return 'http://localhost:8000';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Escuta as mudanças de estado. Quando o botão oficial web ou o popup mobile finalizam, cai aqui.
+    _googleSignIn.onCurrentUserChanged.listen((GoogleSignInAccount? account) {
+      if (account != null) {
+        _processarLoginGoogle(account);
+      }
+    });
+
+    // Opcional: Tenta logar automaticamente caso o usuário já tenha logado antes e a sessão esteja ativa
+    _googleSignIn.signInSilently();
   }
 
   @override
@@ -43,35 +64,39 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  Future<void> _loginComGoogle() async {
+  // Função exclusiva para Mobile: O botão customizado aciona essa função, que abre o popup
+  Future<void> _acionarLoginGoogleMobile() async {
     setState(() => _isLoading = true);
     try {
-      // Instancia o GoogleSignIn (para web e mobile, configure os client_ids se necessário)
-      final GoogleSignIn googleSignIn = GoogleSignIn(
-        // Caso vá testar no Web, pode ser necessário passar o clientId do Google Cloud Console
-        // clientId: 'SEU_CLIENT_ID_WEB.apps.googleusercontent.com',
-      );
-
-      // Força o logout prévio para garantir que o popup de escolha de conta apareça se necessário
-      await googleSignIn.signOut();
-      
-      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
-      if (googleUser == null) {
-        // O usuário cancelou o login
-        setState(() => _isLoading = false);
-        return;
+      final account = await _googleSignIn.signIn();
+      if (account == null) {
+        setState(() => _isLoading = false); // Usuário cancelou
       }
+      // Se não for null, o listener no initState vai capturar e chamar _processarLoginGoogle automaticamente
+    } catch (e) {
+      _mostrarSnackBar('Erro ao abrir Google Sign-In: $e', Colors.redAccent);
+      setState(() => _isLoading = false);
+    }
+  }
 
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+  // Função que realmente extrai o token e envia para o backend (usada tanto no Web quanto no Mobile)
+  Future<void> _processarLoginGoogle(GoogleSignInAccount googleUser) async {
+    setState(() => _isLoading = true);
+    try {
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
       final String? idToken = googleAuth.idToken;
 
       if (idToken == null) {
-        _mostrarSnackBar('Não foi possível obter o token do Google.', Colors.redAccent);
+        _mostrarSnackBar(
+          'Não foi possível obter o token do Google.',
+          Colors.redAccent,
+        );
         setState(() => _isLoading = false);
         return;
       }
 
-      // Envia o idToken para o seu backend FastAPI (/auth/google)
+      // Envia o idToken para o seu backend FastAPI
       final response = await http.post(
         Uri.parse('$_baseUrl/auth/google'),
         headers: {'Content-Type': 'application/json'},
@@ -81,20 +106,26 @@ class _LoginScreenState extends State<LoginScreen> {
       final data = json.decode(response.body);
 
       if (response.statusCode == 200) {
-        // Preenche o gerenciador de estado com os dados retornados pelo backend
         DashboardManager.usuarioAtualId =
-            data['usuario_id']?.toString() ?? data['usuario']?['id']?.toString();
+            data['usuario_id']?.toString() ??
+            data['usuario']?['id']?.toString();
         DashboardManager.usuarioAtualNome =
-            data['usuario_nome']?.toString() ?? data['usuario']?['nome']?.toString();
-        DashboardManager.usuarioAtualEmail = data['usuario']?['email']?.toString();
+            data['usuario_nome']?.toString() ??
+            data['usuario']?['nome']?.toString();
+        DashboardManager.usuarioAtualEmail = data['usuario']?['email']
+            ?.toString();
         DashboardManager.usuarioAtualIdade = data['usuario']?['idade'] is int
             ? data['usuario']['idade'] as int
             : int.tryParse(data['usuario']?['idade']?.toString() ?? '');
-        DashboardManager.usuarioAtualTelefone = data['usuario']?['telefone']?.toString();
-        DashboardManager.usuarioAtualCargo = data['usuario']?['cargo']?.toString();
-        DashboardManager.usuarioAtualEmpresa = data['usuario']?['empresa']?.toString();
+        DashboardManager.usuarioAtualTelefone = data['usuario']?['telefone']
+            ?.toString();
+        DashboardManager.usuarioAtualCargo = data['usuario']?['cargo']
+            ?.toString();
+        DashboardManager.usuarioAtualEmpresa = data['usuario']?['empresa']
+            ?.toString();
         DashboardManager.usuarioAtualBio = data['usuario']?['bio']?.toString();
-        DashboardManager.usuarioAtualFoto = data['usuario']?['foto_url']?.toString();
+        DashboardManager.usuarioAtualFoto = data['usuario']?['foto_url']
+            ?.toString();
 
         if (!mounted) return;
         Navigator.pushReplacement(
@@ -226,7 +257,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Ajuste dinâmico do logo para evitar sobreposição do teclado
     final screenHeight = MediaQuery.of(context).size.height;
     final double logoSize = screenHeight < 700 ? 220 : 325;
 
@@ -257,7 +287,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           : 'Crie sua conta no Flash Dash',
                       textAlign: TextAlign.center,
                       style: const TextStyle(
-                        fontSize: 16, // Reduzido para caber melhor
+                        fontSize: 16,
                         color: Color(0xFF64748B),
                       ),
                     ),
@@ -323,29 +353,50 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  // Botão de Login com o Google estilizado de acordo com o padrão do app
-                  SizedBox(
-                    height: 54,
-                    child: OutlinedButton.icon(
-                      onPressed: _isLoading ? null : _loginComGoogle,
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFFE2E8F0), width: 1.5),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+
+                  // Renderização condicional do botão do Google (Oficial na Web, Customizado no Mobile)
+                  if (kIsWeb)
+                    SizedBox(
+                      height:
+                          44, // O renderButton tem uma altura padrão injetada pelo Google
+                      child:
+                          (GoogleSignInPlatform.instance
+                                  as web.GoogleSignInPlugin)
+                              .renderButton(),
+                    )
+                  else
+                    SizedBox(
+                      height: 54,
+                      child: OutlinedButton.icon(
+                        onPressed: _isLoading
+                            ? null
+                            : _acionarLoginGoogleMobile,
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(
+                            color: Color(0xFFE2E8F0),
+                            width: 1.5,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          backgroundColor: Colors.white,
                         ),
-                        backgroundColor: Colors.white,
-                      ),
-                      icon: const Icon(Icons.g_mobiledata, size: 32, color: Color(0xFF2563EB)),
-                      label: const Text(
-                        'Continuar com o Google',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF0F172A),
+                        icon: const Icon(
+                          Icons.g_mobiledata,
+                          size: 32,
+                          color: Color(0xFF2563EB),
+                        ),
+                        label: const Text(
+                          'Continuar com o Google',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF0F172A),
+                          ),
                         ),
                       ),
                     ),
-                  ),
+
                   const SizedBox(height: 28),
                   TextButton(
                     onPressed: _isLoading

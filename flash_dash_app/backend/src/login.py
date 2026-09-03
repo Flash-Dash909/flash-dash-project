@@ -4,6 +4,9 @@ import re
 import secrets
 import requests
 
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
+
 from db_repository import (
     atualizar_usuario,
     buscar_usuario_por_email,
@@ -108,14 +111,16 @@ async def fazer_login(payload: LoginPayload):
 async def login_google(payload: GoogleLoginPayload):
     try:
         # Valida o ID Token enviado pelo app diretamente no endpoint oficial do Google
-        response = requests.get(
-            f"https://oauth2.googleapis.com/tokeninfo?id_token={payload.token}"
+        # Substitua pelo seu Client ID real
+        CLIENT_ID = "191150128104-28vgeh8p0pm3heti252b7e9t17c16km6.apps.googleusercontent.com"
+        
+        # Valida o token localmente (mais rápido e sem risco de bloqueio do Google)
+        google_data = id_token.verify_oauth2_token(
+            payload.token, 
+            google_requests.Request(), 
+            CLIENT_ID
         )
         
-        if response.status_code != 200:
-            raise HTTPException(status_code=401, detail="Token do Google inválido ou expirado")
-        
-        google_data = response.json()
         email = google_data.get("email")
         nome = google_data.get("name", "Usuário Google")
         foto_url = google_data.get("picture")
