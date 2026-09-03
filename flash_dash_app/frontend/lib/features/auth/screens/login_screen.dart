@@ -4,9 +4,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import 'package:google_sign_in/google_sign_in.dart';
+
 import '../../../core/widgets/app_logo.dart';
 import '../../dashboard/dashboard_manager.dart';
 import '../../home/screens/home_screen.dart';
+
+
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -39,6 +43,77 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  Future<void> _loginComGoogle() async {
+    setState(() => _isLoading = true);
+    try {
+      // Instancia o GoogleSignIn (para web e mobile, configure os client_ids se necessário)
+      final GoogleSignIn googleSignIn = GoogleSignIn(
+        // Caso vá testar no Web, pode ser necessário passar o clientId do Google Cloud Console
+        // clientId: 'SEU_CLIENT_ID_WEB.apps.googleusercontent.com',
+      );
+
+      // Força o logout prévio para garantir que o popup de escolha de conta apareça se necessário
+      await googleSignIn.signOut();
+      
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+      if (googleUser == null) {
+        // O usuário cancelou o login
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final String? idToken = googleAuth.idToken;
+
+      if (idToken == null) {
+        _mostrarSnackBar('Não foi possível obter o token do Google.', Colors.redAccent);
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // Envia o idToken para o seu backend FastAPI (/auth/google)
+      final response = await http.post(
+        Uri.parse('$_baseUrl/auth/google'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'token': idToken}),
+      );
+
+      final data = json.decode(response.body);
+
+      if (response.statusCode == 200) {
+        // Preenche o gerenciador de estado com os dados retornados pelo backend
+        DashboardManager.usuarioAtualId =
+            data['usuario_id']?.toString() ?? data['usuario']?['id']?.toString();
+        DashboardManager.usuarioAtualNome =
+            data['usuario_nome']?.toString() ?? data['usuario']?['nome']?.toString();
+        DashboardManager.usuarioAtualEmail = data['usuario']?['email']?.toString();
+        DashboardManager.usuarioAtualIdade = data['usuario']?['idade'] is int
+            ? data['usuario']['idade'] as int
+            : int.tryParse(data['usuario']?['idade']?.toString() ?? '');
+        DashboardManager.usuarioAtualTelefone = data['usuario']?['telefone']?.toString();
+        DashboardManager.usuarioAtualCargo = data['usuario']?['cargo']?.toString();
+        DashboardManager.usuarioAtualEmpresa = data['usuario']?['empresa']?.toString();
+        DashboardManager.usuarioAtualBio = data['usuario']?['bio']?.toString();
+        DashboardManager.usuarioAtualFoto = data['usuario']?['foto_url']?.toString();
+
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+        );
+      } else {
+        _mostrarSnackBar(
+          data['detail'] ?? 'Erro na autenticação com o Google.',
+          Colors.redAccent,
+        );
+      }
+    } catch (e) {
+      _mostrarSnackBar('Erro ao conectar com o Google: $e', Colors.redAccent);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   Future<void> _submitForm() async {
     if (_emailController.text.trim().isEmpty ||
         _passwordController.text.isEmpty ||
@@ -49,7 +124,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (!_isLoginMode &&
         _passwordController.text != _confirmPasswordController.text) {
-      _mostrarSnackBar('As senhas nao coincidem.', Colors.orange);
+      _mostrarSnackBar('As senhas não coincidem.', Colors.orange);
       return;
     }
 
@@ -106,7 +181,7 @@ class _LoginScreenState extends State<LoginScreen> {
           );
         } else {
           _mostrarSnackBar(
-            'Conta criada com sucesso. Faca login.',
+            'Conta criada com sucesso. Faça login.',
             Colors.green,
           );
           setState(() {
@@ -117,7 +192,7 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       } else {
         _mostrarSnackBar(
-          data['detail'] ?? 'Erro na operacao.',
+          data['detail'] ?? 'Erro na operação.',
           Colors.redAccent,
         );
       }
@@ -151,6 +226,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Ajuste dinâmico do logo para evitar sobreposição do teclado
+    final screenHeight = MediaQuery.of(context).size.height;
+    final double logoSize = screenHeight < 700 ? 220 : 325;
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -162,26 +241,28 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const SizedBox(height: 36),
-                  const ClipRect(
+                  ClipRect(
                     child: Align(
                       alignment: Alignment.topCenter,
                       heightFactor: 0.83,
-                      child: AppLogo(size: 325),
+                      child: AppLogo(size: logoSize),
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _isLoginMode
-                        ? 'Faça login para acessar seus dashboards'
-                        : 'Crie sua conta no Flash Dash',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      color: Color(0xFF64748B),
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Text(
+                      _isLoginMode
+                          ? 'Faça login para acessar seus dashboards'
+                          : 'Crie sua conta no Flash Dash',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 16, // Reduzido para caber melhor
+                        color: Color(0xFF64748B),
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 64),
+                  const SizedBox(height: 48),
                   if (!_isLoginMode) ...[
                     TextField(
                       controller: _nameController,
@@ -239,6 +320,30 @@ class _LoginScreenState extends State<LoginScreen> {
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Botão de Login com o Google estilizado de acordo com o padrão do app
+                  SizedBox(
+                    height: 54,
+                    child: OutlinedButton.icon(
+                      onPressed: _isLoading ? null : _loginComGoogle,
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFFE2E8F0), width: 1.5),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        backgroundColor: Colors.white,
+                      ),
+                      icon: const Icon(Icons.g_mobiledata, size: 32, color: Color(0xFF2563EB)),
+                      label: const Text(
+                        'Continuar com o Google',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 28),
