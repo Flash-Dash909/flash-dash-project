@@ -2,6 +2,10 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import re
 import secrets
+import requests
+
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
 
 from db_repository import (
     atualizar_usuario,
@@ -24,6 +28,8 @@ class CadastroPayload(BaseModel):
     email: str
     senha: str
 
+class GoogleLoginPayload(BaseModel):
+    token: str  # ID Token recebido do Google Sign-In no Flutter
 
 class PerfilPayload(BaseModel):
     nome: str | None = None
@@ -101,6 +107,57 @@ async def fazer_login(payload: LoginPayload):
         "token": secrets.token_urlsafe(32),
     }
 
+@router.post("/google")
+async def login_google(payload: GoogleLoginPayload):
+    try:
+        # Valida o ID Token enviado pelo app diretamente no endpoint oficial do Google
+        # Substitua pelo seu Client ID real
+        CLIENT_ID = "191150128104-28vgeh8p0pm3heti252b7e9t17c16km6.apps.googleusercontent.com"
+        
+        # Valida o token localmente (mais rápido e sem risco de bloqueio do Google)
+        google_data = id_token.verify_oauth2_token(
+            payload.token, 
+            google_requests.Request(), 
+            CLIENT_ID
+        )
+        
+        email = google_data.get("email")
+        nome = google_data.get("name", "Usuário Google")
+        foto_url = google_data.get("picture")
+
+        if not email:
+            raise HTTPException(status_code=400, detail="E-mail não fornecido pelo Google")
+
+        email = email.strip().lower()
+        usuario = buscar_usuario_por_email(email)
+
+        # Se o usuário ainda não tem conta no sistema, criamos uma automaticamente
+        if not usuario:
+            # Como o cadastro comum exige senha, geramos uma senha aleatória segura para o login social
+            senha_aleatoria = secrets.token_urlsafe(32)
+            usuario = criar_usuario(nome, email, senha_aleatoria)
+            
+            if not usuario:
+                raise HTTPException(status_code=500, detail="Não foi possível criar o usuário via Google")
+
+        # Se o usuário já existe mas não possui foto cadastrada, atualizamos com a do Google
+        if foto_url and not usuario.get("foto_url"):
+            atualizar_usuario(usuario.get("id"), {"foto_url": foto_url})
+            usuario["foto_url"] = foto_url
+
+        return {
+            "status": "success",
+            "mensagem": "Login com Google realizado com sucesso!",
+            "usuario": _usuario_publico(usuario),
+            "usuario_id": usuario.get("id"),
+            "usuario_nome": usuario.get("nome"),
+            "token": secrets.token_urlsafe(32),
+        }
+
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao autenticar com o Google: {str(e)}")
 
 @router.get("/perfil/{usuario_id}")
 async def obter_perfil(usuario_id: str):

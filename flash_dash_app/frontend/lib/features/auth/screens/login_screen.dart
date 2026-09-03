@@ -4,6 +4,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:google_sign_in_platform_interface/google_sign_in_platform_interface.dart';
+import 'package:google_sign_in_web/google_sign_in_web.dart' as web;
+
 import '../../../core/widgets/app_logo.dart';
 import '../../dashboard/dashboard_manager.dart';
 import '../../home/screens/home_screen.dart';
@@ -25,9 +29,30 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   bool _isLoginMode = true;
 
+  // Instância do GoogleSignIn movida para o nível da classe (sem escopos extras para não quebrar o idToken)
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    clientId:
+        '191150128104-28vgeh8p0pm3heti252b7e9t17c16km6.apps.googleusercontent.com',
+  );
+
   String get _baseUrl {
     if (!kIsWeb) return 'http://10.0.2.2:8000';
     return 'http://localhost:8000';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Escuta as mudanças de estado. Quando o botão oficial web ou o popup mobile finalizam, cai aqui.
+    _googleSignIn.onCurrentUserChanged.listen((GoogleSignInAccount? account) {
+      if (account != null) {
+        _processarLoginGoogle(account);
+      }
+    });
+
+    // Opcional: Tenta logar automaticamente caso o usuário já tenha logado antes e a sessão esteja ativa
+    _googleSignIn.signInSilently();
   }
 
   @override
@@ -37,6 +62,87 @@ class _LoginScreenState extends State<LoginScreen> {
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  // Função exclusiva para Mobile: O botão customizado aciona essa função, que abre o popup
+  Future<void> _acionarLoginGoogleMobile() async {
+    setState(() => _isLoading = true);
+    try {
+      final account = await _googleSignIn.signIn();
+      if (account == null) {
+        setState(() => _isLoading = false); // Usuário cancelou
+      }
+      // Se não for null, o listener no initState vai capturar e chamar _processarLoginGoogle automaticamente
+    } catch (e) {
+      _mostrarSnackBar('Erro ao abrir Google Sign-In: $e', Colors.redAccent);
+      setState(() => _isLoading = false);
+    }
+  }
+
+  // Função que realmente extrai o token e envia para o backend (usada tanto no Web quanto no Mobile)
+  Future<void> _processarLoginGoogle(GoogleSignInAccount googleUser) async {
+    setState(() => _isLoading = true);
+    try {
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
+      final String? idToken = googleAuth.idToken;
+
+      if (idToken == null) {
+        _mostrarSnackBar(
+          'Não foi possível obter o token do Google.',
+          Colors.redAccent,
+        );
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // Envia o idToken para o seu backend FastAPI
+      final response = await http.post(
+        Uri.parse('$_baseUrl/auth/google'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'token': idToken}),
+      );
+
+      final data = json.decode(response.body);
+
+      if (response.statusCode == 200) {
+        DashboardManager.usuarioAtualId =
+            data['usuario_id']?.toString() ??
+            data['usuario']?['id']?.toString();
+        DashboardManager.usuarioAtualNome =
+            data['usuario_nome']?.toString() ??
+            data['usuario']?['nome']?.toString();
+        DashboardManager.usuarioAtualEmail = data['usuario']?['email']
+            ?.toString();
+        DashboardManager.usuarioAtualIdade = data['usuario']?['idade'] is int
+            ? data['usuario']['idade'] as int
+            : int.tryParse(data['usuario']?['idade']?.toString() ?? '');
+        DashboardManager.usuarioAtualTelefone = data['usuario']?['telefone']
+            ?.toString();
+        DashboardManager.usuarioAtualCargo = data['usuario']?['cargo']
+            ?.toString();
+        DashboardManager.usuarioAtualEmpresa = data['usuario']?['empresa']
+            ?.toString();
+        DashboardManager.usuarioAtualBio = data['usuario']?['bio']?.toString();
+        DashboardManager.usuarioAtualFoto = data['usuario']?['foto_url']
+            ?.toString();
+
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+        );
+      } else {
+        _mostrarSnackBar(
+          data['detail'] ?? 'Erro na autenticação com o Google.',
+          Colors.redAccent,
+        );
+      }
+    } catch (e) {
+      _mostrarSnackBar('Erro ao conectar com o Google: $e', Colors.redAccent);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _submitForm() async {
@@ -49,7 +155,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (!_isLoginMode &&
         _passwordController.text != _confirmPasswordController.text) {
-      _mostrarSnackBar('As senhas nao coincidem.', Colors.orange);
+      _mostrarSnackBar('As senhas não coincidem.', Colors.orange);
       return;
     }
 
@@ -106,7 +212,7 @@ class _LoginScreenState extends State<LoginScreen> {
           );
         } else {
           _mostrarSnackBar(
-            'Conta criada com sucesso. Faca login.',
+            'Conta criada com sucesso. Faça login.',
             Colors.green,
           );
           setState(() {
@@ -117,7 +223,7 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       } else {
         _mostrarSnackBar(
-          data['detail'] ?? 'Erro na operacao.',
+          data['detail'] ?? 'Erro na operação.',
           Colors.redAccent,
         );
       }
@@ -151,6 +257,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final double logoSize = screenHeight < 700 ? 220 : 325;
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -162,26 +271,28 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const SizedBox(height: 36),
-                  const ClipRect(
+                  ClipRect(
                     child: Align(
                       alignment: Alignment.topCenter,
                       heightFactor: 0.83,
-                      child: AppLogo(size: 325),
+                      child: AppLogo(size: logoSize),
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _isLoginMode
-                        ? 'Faça login para acessar seus dashboards'
-                        : 'Crie sua conta no Flash Dash',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      color: Color(0xFF64748B),
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Text(
+                      _isLoginMode
+                          ? 'Faça login para acessar seus dashboards'
+                          : 'Crie sua conta no Flash Dash',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: Color(0xFF64748B),
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 64),
+                  const SizedBox(height: 48),
                   if (!_isLoginMode) ...[
                     TextField(
                       controller: _nameController,
@@ -241,6 +352,65 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                     ),
                   ),
+                  const SizedBox(height: 16),
+
+                  // Renderização condicional do botão do Google (Oficial na Web, Customizado no Mobile)
+                  // Renderização condicional do botão do Google
+                  if (kIsWeb)
+                    SizedBox(
+                      // A altura de 54 não afeta diretamente o iframe, mas reserva o espaço correto na tela
+                      height: 54,
+                      child: (GoogleSignInPlatform.instance as web.GoogleSignInPlugin)
+                          .renderButton(
+                            configuration: web.GSIButtonConfiguration(
+                              type: web.GSIButtonType.standard,
+                              theme: web.GSIButtonTheme.outline,
+                              size: web.GSIButtonSize.large,
+                              text: web
+                                  .GSIButtonText
+                                  .continueWith, // Muda o texto para "Continuar com o Google"
+                              shape: web
+                                  .GSIButtonShape
+                                  .rectangular, // Mantém um leve arredondamento
+                              minimumWidth:
+                                  430, // Força o iframe a esticar até o limite do seu container
+                            ),
+                          ),
+                    )
+                  else
+                    // O seu código do botão mobile continua exatamente igual
+                    SizedBox(
+                      height: 54,
+                      child: OutlinedButton.icon(
+                        onPressed: _isLoading
+                            ? null
+                            : _acionarLoginGoogleMobile,
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(
+                            color: Color(0xFFE2E8F0),
+                            width: 1.5,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          backgroundColor: Colors.white,
+                        ),
+                        icon: const Icon(
+                          Icons.g_mobiledata,
+                          size: 32,
+                          color: Color(0xFF2563EB),
+                        ),
+                        label: const Text(
+                          'Continuar com o Google',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                      ),
+                    ),
+
                   const SizedBox(height: 28),
                   TextButton(
                     onPressed: _isLoading
