@@ -36,7 +36,7 @@ class _LoginScreenState extends State<LoginScreen> {
   );
 
   String get _baseUrl {
-    if (!kIsWeb) return 'http://10.0.2.2:8000';
+    if (!kIsWeb) return 'https://flash-dash-project-7.onrender.com';
     return 'https://flash-dash-project-7.onrender.com';
   }
 
