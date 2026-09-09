@@ -47,6 +47,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/")
+def home():
+    return {"status": "online", "message": "Flash Dash API está funcionando!"}
+
 @app.post("/analisar-planilha")
 async def analisar_rota(file: UploadFile = File(...), fonte_tipo: str = Form("arquivo")):
     

@@ -35,7 +35,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _perfilEditando = false;
   String? _fotoPerfil;
 
-  String get _baseUrl => 'http://127.0.0.1:8000';
+  String get _baseUrl => 'https://flash-dash-project-7.onrender.com';
 
   @override
   void initState() {
@@ -210,8 +210,8 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final usuarioId = DashboardManager.usuarioAtualId;
       final url = usuarioId == null
-          ? 'http://127.0.0.1:8000/listar-dashboards'
-          : 'http://127.0.0.1:8000/listar-dashboards?usuario_id=$usuarioId';
+          ? 'https://flash-dash-project-7.onrender.com/listar-dashboards'
+          : 'https://flash-dash-project-7.onrender.com/listar-dashboards?usuario_id=$usuarioId';
       var response = await http.get(Uri.parse(url));
       if (response.statusCode == 200) {
         return json.decode(utf8.decode(response.bodyBytes));
@@ -225,7 +225,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<List<dynamic>> _buscarLogsETL() async {
     try {
       var response = await http.get(
-        Uri.parse('http://127.0.0.1:8000/listar-logs-etl'),
+        Uri.parse('https://flash-dash-project-7.onrender.com/listar-logs-etl'),
       );
       if (response.statusCode == 200) {
         return json.decode(utf8.decode(response.bodyBytes));
@@ -626,7 +626,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       final response = await http.delete(
-        Uri.parse("http://127.0.0.1:8000/dashboards/${dash['id']}"),
+        Uri.parse("https://flash-dash-project-7.onrender.com/dashboards/${dash['id']}"),
       );
       if (!mounted) return;
       if (response.statusCode == 200) {

@@ -47,7 +47,7 @@ Com a recente integração de Inteligência Artificial Generativa, a plataforma 
 4. Instale as dependências: `pip install -r requirements.txt` *(certifique-se de ter fastapi, uvicorn, pandas, google-genai, python-dotenv)*
 5. Configure as variáveis de ambiente: Crie um arquivo `.env` na raiz do backend e adicione sua chave de IA: `GEMINI_API_KEY=sua_chave_aqui`
 6. Inicie o servidor: `uvicorn src.main:app --reload`
-   * Acompanhe a documentação automática em: `http://127.0.0.1:8000/docs`
+   * Acompanhe a documentação automática em: `https://flash-dash-project-7.onrender.com/docs`
 
 ### 💙 Configurando o Front-End (Flutter)
 1. Acesse a pasta: `cd core/frontend`

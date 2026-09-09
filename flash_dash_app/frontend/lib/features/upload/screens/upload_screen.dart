@@ -151,7 +151,7 @@ class _UploadScreenState extends State<UploadScreen> {
         throw Exception("Nao foi possivel ler o arquivo selecionado.");
       }
 
-      final uri = Uri.parse('http://127.0.0.1:8000/analisar-planilha');
+      final uri = Uri.parse('https://flash-dash-project-7.onrender.com/analisar-planilha');
       final request = http.MultipartRequest('POST', uri);
       request.fields['fonte_tipo'] = fonte["tipo"];
       request.files.add(
@@ -207,7 +207,7 @@ class _UploadScreenState extends State<UploadScreen> {
     try {
       setState(() => _isLoading = true);
       final response = await http.post(
-        Uri.parse('http://127.0.0.1:8000/analisar-url'),
+        Uri.parse('https://flash-dash-project-7.onrender.com/analisar-url'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'url': url,

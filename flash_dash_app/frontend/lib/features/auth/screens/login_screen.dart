@@ -37,7 +37,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   String get _baseUrl {
     if (!kIsWeb) return 'http://10.0.2.2:8000';
-    return 'http://localhost:8000';
+    return 'https://flash-dash-project-7.onrender.com';
   }
 
   @override

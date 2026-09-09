@@ -190,7 +190,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
 
                   try {
                     var response = await http.post(
-                      Uri.parse('http://127.0.0.1:8000/salvar-dashboard'),
+                      Uri.parse('https://flash-dash-project-7.onrender.com/salvar-dashboard'),
                       headers: {"Content-Type": "application/json"},
                       body: json.encode({
                         "titulo": nomeController.text,
@@ -268,7 +268,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
 
     try {
       final response = await http.delete(
-        Uri.parse("http://127.0.0.1:8000/dashboards/$dashboardId"),
+        Uri.parse("https://flash-dash-project-7.onrender.com/dashboards/$dashboardId"),
       );
       if (!mounted) return;
       if (response.statusCode == 200) {
@@ -435,7 +435,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
         .toList();
 
     try {
-      var uri = Uri.parse('http://127.0.0.1:8000/chat-ia');
+      var uri = Uri.parse('https://flash-dash-project-7.onrender.com/chat-ia');
       var response = await http.post(
         uri,
         headers: {"Content-Type": "application/json"},
