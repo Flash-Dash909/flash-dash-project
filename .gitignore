@@ -26,3 +26,9 @@ flutter pub add fl_chart
 
 #uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! USAR ESSE flutter run -d chrome --web-port 3000
+
+#//sempre que alterar o frontend, rodar:
+#cd flash_dash_app/frontend
+#flutter clean
+#flutter build web --release
+#depois ir na vercel e fazer o deploy novamente
