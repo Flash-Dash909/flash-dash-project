@@ -421,8 +421,9 @@ class _ChartPainter extends CustomPainter {
   ]) {
     if (corOrigem is Color) return corOrigem;
     if (corOrigem is String) {
-      if (corOrigem.startsWith('#'))
+      if (corOrigem.startsWith('#')) {
         return Color(int.parse(corOrigem.replaceFirst('#', '0xFF')));
+      }
       final valorNumerico = int.tryParse(corOrigem);
       if (valorNumerico != null) return Color(valorNumerico);
     }
@@ -714,6 +715,56 @@ class _ChartPainter extends CustomPainter {
     return maximo <= 0 ? 1 : maximo;
   }
 
+  double _maxValorDaSerie(List<Map<String, dynamic>> dados, String key) {
+    final values = dados
+        .where((item) => item[key] is num)
+        .map((item) => (item[key] as num).toDouble().abs())
+        .toList();
+    if (values.isEmpty) return 1;
+    final maximum = values.reduce(math.max);
+    return maximum <= 0 ? 1 : maximum;
+  }
+
+  bool _usarEscalaSecundariaIndependente(List<Map<String, dynamic>> dados) {
+    if (!dados.any((item) => item.containsKey('value2'))) return false;
+    final mode =
+        config.configExtra['secondaryScaleMode']?.toString() ?? 'automatico';
+    if (mode == 'independente') return true;
+    if (mode == 'mesma') return false;
+    final first = _maxValorDaSerie(dados, 'value');
+    final second = _maxValorDaSerie(dados, 'value2');
+    final ratio =
+        math.max(first, second) / math.max(0.000001, math.min(first, second));
+    return ratio >= 20;
+  }
+
+  void _desenharEscalaSecundaria(Canvas canvas, Rect rect, double maximum) {
+    if (!config.mostrarEixos) return;
+    final painter = TextPainter(
+      textDirection: TextDirection.ltr,
+      textAlign: TextAlign.right,
+    );
+    final count = _numExtra('gridCount', 4).round().clamp(2, 10);
+    for (int index = 0; index <= count; index++) {
+      final value = maximum * (1 - index / count);
+      painter.text = TextSpan(
+        text: _formatarNumero(value),
+        style: TextStyle(
+          fontSize: _numExtra('yAxisFontSize', 9),
+          color: _corMetricaSecundaria().withValues(alpha: 0.9),
+        ),
+      );
+      painter.layout(maxWidth: 64);
+      painter.paint(
+        canvas,
+        Offset(
+          rect.right - painter.width - 2,
+          rect.top + rect.height * index / count,
+        ),
+      );
+    }
+  }
+
   double _minValor() {
     final configured = config.configExtra['yAxisMin'];
     return configured is num ? configured.toDouble() : 0.0;
@@ -973,8 +1024,17 @@ class _ChartPainter extends CustomPainter {
     required bool horizontal,
   }) {
     if (dados.isEmpty) return;
-    final maxValor = _maxValor(dados);
-    _desenharGrade(canvas, rect, maxValor);
+    final independent = _usarEscalaSecundariaIndependente(dados);
+    final primaryMax = independent
+        ? _maxValorDaSerie(dados, 'value')
+        : _maxValor(dados);
+    final secondaryMax = independent
+        ? _maxValorDaSerie(dados, 'value2')
+        : primaryMax;
+    _desenharGrade(canvas, rect, primaryMax);
+    if (independent) {
+      _desenharEscalaSecundaria(canvas, rect, secondaryMax);
+    }
     final primary = _corMetricaPrincipal();
     final secondary = _corMetricaSecundaria();
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
@@ -990,13 +1050,13 @@ class _ChartPainter extends CustomPainter {
         final r1 = Rect.fromLTWH(
           rect.left,
           top,
-          rect.width * _normalizar(v1, maxValor),
+          rect.width * _normalizar(v1, primaryMax),
           barHeight,
         );
         final r2 = Rect.fromLTWH(
           rect.left,
           top + barHeight,
-          rect.width * _normalizar(v2, maxValor),
+          rect.width * _normalizar(v2, secondaryMax),
           barHeight,
         );
         canvas.drawRRect(
@@ -1029,15 +1089,15 @@ class _ChartPainter extends CustomPainter {
       final groupLeft = rect.left + i * slot + groupGap / 2;
       final r1 = Rect.fromLTWH(
         groupLeft,
-        rect.bottom - rect.height * _normalizar(v1, maxValor),
+        rect.bottom - rect.height * _normalizar(v1, primaryMax),
         width,
-        rect.height * _normalizar(v1, maxValor),
+        rect.height * _normalizar(v1, primaryMax),
       );
       final r2 = Rect.fromLTWH(
         groupLeft + width,
-        rect.bottom - rect.height * _normalizar(v2, maxValor),
+        rect.bottom - rect.height * _normalizar(v2, secondaryMax),
         width,
-        rect.height * _normalizar(v2, maxValor),
+        rect.height * _normalizar(v2, secondaryMax),
       );
       canvas.drawRRect(
         RRect.fromRectAndRadius(r1, Radius.circular(_numExtra('barRadius', 4))),
@@ -1227,15 +1287,25 @@ class _ChartPainter extends CustomPainter {
     List<Map<String, dynamic>> dados,
     bool area,
   ) {
-    final maxValor = _maxValor(dados);
-    _desenharGrade(canvas, rect, maxValor);
+    final independent = _usarEscalaSecundariaIndependente(dados);
+    final primaryMax = independent
+        ? _maxValorDaSerie(dados, 'value')
+        : _maxValor(dados);
+    final secondaryMax = independent
+        ? _maxValorDaSerie(dados, 'value2')
+        : primaryMax;
+    _desenharGrade(canvas, rect, primaryMax);
+    if (independent) {
+      _desenharEscalaSecundaria(canvas, rect, secondaryMax);
+    }
     if (dados.length < 2) return;
 
     List<Offset> pointsFor(String key) {
       return List.generate(dados.length, (index) {
         final value = ((dados[index][key] ?? 0) as num).toDouble();
         final x = rect.left + (rect.width / (dados.length - 1)) * index;
-        final y = rect.bottom - _normalizar(value, maxValor) * rect.height;
+        final maximum = key == 'value2' ? secondaryMax : primaryMax;
+        final y = rect.bottom - _normalizar(value, maximum) * rect.height;
         return Offset(x, y);
       });
     }
@@ -1602,10 +1672,11 @@ class _ChartPainter extends CustomPainter {
         final p =
             center +
             Offset(math.cos(angle), math.sin(angle)) * radius * (level / 4);
-        if (i == 0)
+        if (i == 0) {
           path.moveTo(p.dx, p.dy);
-        else
+        } else {
           path.lineTo(p.dx, p.dy);
+        }
       }
       path.close();
       canvas.drawPath(path, gridPaint);
@@ -1940,7 +2011,11 @@ class _ChartPainter extends CustomPainter {
     );
     if (total <= 0) return;
 
-    var remaining = rect;
+    final padding = _numExtra(
+      'treemapPadding',
+      0,
+    ).clamp(0.0, math.max(0.0, rect.shortestSide / 3));
+    var remaining = rect.deflate(padding.toDouble());
     final border = Paint()
       ..color = Colors.white
       ..style = PaintingStyle.stroke
@@ -3511,6 +3586,7 @@ class _MatrizVisual extends StatelessWidget {
         .toDouble();
     final expanded = config.configExtra['matrixExpanded'] as bool? ?? false;
     final showTotals = config.configExtra['showTotals'] as bool? ?? true;
+    final showSubtotals = config.configExtra['showSubtotals'] as bool? ?? true;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3611,7 +3687,7 @@ class _MatrizVisual extends StatelessWidget {
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
-                                if (expanded)
+                                if (expanded && showSubtotals)
                                   Text(
                                     item['secondaryLabel']?.toString() ??
                                         'Subtotal ${_formatarValorVisual(config, value)}',
@@ -4368,9 +4444,14 @@ String _formatarValorVisual(
   return '$prefix$text$unitSuffix$suffix';
 }
 
+String formatarValorVisual(ChartConfig config, double valor) {
+  return _formatarValorVisual(config, valor);
+}
+
 String _formatarValor(double valor) {
-  if (valor.abs() >= 1000000)
+  if (valor.abs() >= 1000000) {
     return '${(valor / 1000000).toStringAsFixed(1)} Mi';
+  }
   if (valor.abs() >= 1000) return '${(valor / 1000).toStringAsFixed(1)} Mil';
   return valor == valor.toInt()
       ? valor.toInt().toString()

@@ -1,0 +1,6 @@
+Carga 1: p95=1.59 ms, RPS=801.45, erros=0
+Carga 5: p95=6.82 ms, RPS=1145.89, erros=0
+Carga 10: p95=23.87 ms, RPS=848.6, erros=0
+Carga 25: p95=85.63 ms, RPS=635.67, erros=0
+Carga 50: p95=134.0 ms, RPS=602.35, erros=0
+

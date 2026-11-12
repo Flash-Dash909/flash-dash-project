@@ -1,9 +1,10 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
+import '../../../core/api_config.dart';
 import '../../../core/widgets/app_logo.dart';
+import '../../dashboard/dashboard_manager.dart';
 import '../../home/screens/home_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -19,13 +20,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
 
-  String get _baseUrl {
-    if (!kIsWeb) {
-      return 'http://10.0.2.2:8000';
-    }
-
-    return 'https://flash-dash-project-7.onrender.com';
-  }
+  String get _baseUrl => ApiConfig.baseUrl;
 
   @override
   void dispose() {
@@ -55,7 +50,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        debugPrint("Token recebido: ${data['token']}");
+        final usuario = data['usuario'] as Map<String, dynamic>? ?? {};
+        DashboardManager.usuarioAtualId =
+            data['usuario_id']?.toString() ?? usuario['id']?.toString();
+        DashboardManager.tokenAutenticacao = data['token']?.toString();
+        DashboardManager.usuarioAtualNome =
+            data['usuario_nome']?.toString() ?? usuario['nome']?.toString();
+        DashboardManager.usuarioAtualEmail = usuario['email']?.toString();
 
         if (mounted) {
           Navigator.pushReplacement(
@@ -99,8 +100,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(title: const Text('Criar conta')),
       body: Center(
         child: SingleChildScrollView(
@@ -117,14 +120,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
               ),
               const SizedBox(height: 4),
-              const Text(
+              Text(
                 'Crie seu acesso ao Flash Dash',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 16, color: Color(0xFF64748B)),
+                style: TextStyle(fontSize: 16, color: scheme.onSurfaceVariant),
               ),
               const SizedBox(height: 40),
               TextField(
                 controller: _nameController,
+                style: TextStyle(color: scheme.onSurface),
                 textInputAction: TextInputAction.next,
                 decoration: const InputDecoration(
                   labelText: 'Nome',
@@ -134,6 +138,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               const SizedBox(height: 16),
               TextField(
                 controller: _emailController,
+                style: TextStyle(color: scheme.onSurface),
                 keyboardType: TextInputType.emailAddress,
                 textInputAction: TextInputAction.next,
                 decoration: const InputDecoration(
@@ -144,6 +149,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               const SizedBox(height: 16),
               TextField(
                 controller: _passwordController,
+                style: TextStyle(color: scheme.onSurface),
                 obscureText: true,
                 decoration: const InputDecoration(
                   labelText: 'Senha',

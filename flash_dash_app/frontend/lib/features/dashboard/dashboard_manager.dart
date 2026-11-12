@@ -61,6 +61,15 @@ class DashboardManager {
   static Map<String, dynamic>? dadosFonteAtual;
   static String? dashboardAtualId;
   static String? usuarioAtualId;
+  static String? tokenAutenticacao;
+
+  static Map<String, String> get authHeaders {
+    final token = tokenAutenticacao;
+    return token == null || token.isEmpty
+        ? <String, String>{}
+        : <String, String>{'Authorization': 'Bearer $token'};
+  }
+
   static String? usuarioAtualNome;
   static String? usuarioAtualEmail;
   static int? usuarioAtualIdade;

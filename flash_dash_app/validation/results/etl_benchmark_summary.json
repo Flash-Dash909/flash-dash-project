@@ -1,0 +1,33 @@
+{
+  "generated_at": "2026-10-16T22:12:14.451230+00:00",
+  "warmup_rows": 200,
+  "aggregates": [
+    {
+      "input_rows": 1000,
+      "runs": 3,
+      "success_rate": 1.0,
+      "median_duration_ms": 195.54,
+      "p95_duration_ms": 200.382,
+      "median_throughput_rows_s": 5113.92,
+      "median_peak_memory_mb": 86.78
+    },
+    {
+      "input_rows": 10000,
+      "runs": 3,
+      "success_rate": 1.0,
+      "median_duration_ms": 1649.62,
+      "p95_duration_ms": 1654.1470000000002,
+      "median_throughput_rows_s": 6062.01,
+      "median_peak_memory_mb": 100.27
+    },
+    {
+      "input_rows": 50000,
+      "runs": 3,
+      "success_rate": 1.0,
+      "median_duration_ms": 8196.78,
+      "p95_duration_ms": 8471.145,
+      "median_throughput_rows_s": 6099.96,
+      "median_peak_memory_mb": 165.61
+    }
+  ]
+}

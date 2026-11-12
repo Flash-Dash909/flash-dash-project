@@ -106,28 +106,8 @@ class _PowerBiFormatPanelState extends State<PowerBiFormatPanel> {
             'categoryAsc': 'Categoria A-Z',
             'categoryDesc': 'Categoria Z-A',
           }),
-          if (caps.supportsSmallMultiples) ...[
-            _switch('Pequenos multiplos', 'smallMultiplesEnabled'),
-            if (_get('smallMultiplesEnabled', false))
-              _slider(
-                'Colunas da grade',
-                'smallMultiplesColumns',
-                1,
-                6,
-                divisions: 5,
-              ),
-            if (_get('smallMultiplesEnabled', false))
-              _switch('Compartilhar escala', 'smallMultiplesSharedScale'),
-          ],
         ]),
         _section('Aparencia', Icons.palette_outlined, [
-          _dropdown('Paleta', 'paletteMode', const {
-            'categorical': 'Categorica',
-            'monochrome': 'Monocromatica',
-            'complementary': 'Complementar',
-            'analogous': 'Analoga',
-            'gradient': 'Gradiente',
-          }),
           _colorPicker('Fundo da area de plotagem', 'plotBackgroundColor'),
           _slider(
             'Opacidade do fundo',
@@ -147,7 +127,15 @@ class _PowerBiFormatPanelState extends State<PowerBiFormatPanel> {
               divisions: 16,
             ),
           ],
-          _switch('Evitar colisao de textos', 'responsiveLabels'),
+          _colorPicker('Cor da metrica principal', 'corMetricaPrincipal'),
+          if (caps.supportsSecondMetric) ...[
+            _colorPicker('Cor da segunda metrica', 'corMetricaSecundaria'),
+            _dropdown('Escala da segunda metrica', 'secondaryScaleMode', const {
+              'automatico': 'Automatica',
+              'mesma': 'Mesma escala',
+              'independente': 'Eixo independente',
+            }),
+          ],
           ..._appearanceSpecificControls(),
         ]),
         if (caps.usesLegend)
@@ -183,17 +171,6 @@ class _PowerBiFormatPanelState extends State<PowerBiFormatPanel> {
           }),
           _slider('Tamanho da fonte', 'labelFontSize', 8, 28, divisions: 20),
           _colorPicker('Cor do rotulo', 'labelColor'),
-          _switch('Fundo do rotulo', 'labelBackground'),
-          if (_get('labelBackground', false)) ...[
-            _colorPicker('Cor do fundo', 'labelBackgroundColor'),
-            _slider(
-              'Opacidade do fundo',
-              'labelBackgroundOpacity',
-              0,
-              1,
-              divisions: 20,
-            ),
-          ],
           if (caps.isBar || caps.isColumn || caps.isArea)
             _switch('Rotulo do total', 'showTotalLabels'),
         ]),
@@ -225,7 +202,6 @@ class _PowerBiFormatPanelState extends State<PowerBiFormatPanel> {
               _slider('Quantidade de linhas', 'gridCount', 2, 10, divisions: 8),
             ],
             if (caps.isCombo) _switch('Eixo Y secundario', 'secondaryAxis'),
-            _switch('Zoom de eixo', 'zoomEnabled'),
           ]),
         _section('Interacoes', Icons.touch_app_outlined, [
           _switch('Tooltip', 'tooltipEnabled'),
@@ -241,8 +217,6 @@ class _PowerBiFormatPanelState extends State<PowerBiFormatPanel> {
           _switch('Realcar selecao', 'interactionHighlight'),
           _switch('Multisselecao', 'interactionMultiSelect'),
           _switch('Drill-through', 'interactionDrillthrough'),
-          _switch('Modo de foco', 'interactionFocusMode'),
-          _switch('Ordenacao pelo cabecalho', 'interactionSort'),
         ]),
         _section('Animacoes', Icons.animation_outlined, [
           _switch('Animar visual', 'animationEnabled'),
@@ -291,10 +265,6 @@ class _PowerBiFormatPanelState extends State<PowerBiFormatPanel> {
             _colorPicker('Cor das analises', 'analyticsColor'),
             if (caps.isLine || caps.isArea || caps.isScatter)
               _switch('Linha de tendencia', 'trendLine'),
-            if (caps.isLine || caps.isArea)
-              _switch('Previsao', 'forecastEnabled'),
-            if (caps.isLine)
-              _switch('Deteccao de anomalias', 'anomalyDetection'),
           ],
           ..._advancedSpecificControls(),
         ]),
@@ -386,8 +356,6 @@ class _PowerBiFormatPanelState extends State<PowerBiFormatPanel> {
       return [
         _slider('Espaco entre blocos', 'treemapSpacing', 0, 16, divisions: 16),
         _slider('Padding dos blocos', 'treemapPadding', 0, 20, divisions: 20),
-        _switch('Exibir hierarquia', 'treemapHierarchy'),
-        _switch('Agrupar valores pequenos', 'treemapGroupSmall'),
       ];
     }
     if (caps.isGauge) {
@@ -433,7 +401,6 @@ class _PowerBiFormatPanelState extends State<PowerBiFormatPanel> {
         _switch('Totais gerais', 'showTotals'),
         if (caps.isMatrix) _switch('Subtotais', 'showSubtotals'),
         if (caps.isMatrix) _switch('Expandir hierarquia', 'matrixExpanded'),
-        _switch('Congelar cabecalho', 'freezeHeaders'),
         _switch('Barras de dados', 'conditionalDataBars'),
         _switch('Icones condicionais', 'conditionalIcons'),
       ];
@@ -456,7 +423,6 @@ class _PowerBiFormatPanelState extends State<PowerBiFormatPanel> {
         _switch('Selecao multipla', 'segmentacaoMultipla'),
         _switch('Selecionar tudo', 'slicerSelectAll'),
         _switch('Campo de busca', 'slicerSearch'),
-        _switch('Botao aplicar', 'slicerApplyButton'),
         _text('Placeholder', 'slicerPlaceholder'),
         _colorPicker('Cor do item', 'slicerItemColor'),
         _colorPicker('Cor selecionada', 'slicerSelectedColor'),
@@ -471,7 +437,6 @@ class _PowerBiFormatPanelState extends State<PowerBiFormatPanel> {
           'road': 'Ruas',
           'satellite': 'Satelite',
         }),
-        _switch('Agrupar pontos', 'mapCluster'),
         _switch('Camada de calor', 'mapHeatLayer'),
         _slider('Tamanho das bolhas', 'mapBubbleSize', 4, 36, divisions: 16),
         _slider('Opacidade', 'mapOpacity', 0.1, 1, divisions: 18),
@@ -499,14 +464,7 @@ class _PowerBiFormatPanelState extends State<PowerBiFormatPanel> {
       ];
     }
     if (caps.isFunnel) {
-      return [
-        _switch('Taxa de conversao', 'funnelShowConversion'),
-        _dropdown('Posicao dos rotulos', 'funnelLabelPosition', const {
-          'inside': 'Interno',
-          'outside': 'Externo',
-        }),
-        _switch('Cores em gradiente', 'funnelGradient'),
-      ];
+      return [_switch('Taxa de conversao', 'funnelShowConversion')];
     }
     if (caps.isHistogram) {
       return [

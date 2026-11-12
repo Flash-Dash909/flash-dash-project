@@ -1,0 +1,11 @@
+question_id,statement_pt,polarity
+Q1,Eu acho que gostaria de usar o Flash Dash com frequencia,positive
+Q2,Eu achei o Flash Dash desnecessariamente complexo,negative
+Q3,Eu achei o Flash Dash facil de usar,positive
+Q4,Eu acho que precisaria de suporte tecnico para usar o Flash Dash,negative
+Q5,Eu achei que as funcoes do Flash Dash estavam bem integradas,positive
+Q6,Eu achei que havia muita inconsistencia no Flash Dash,negative
+Q7,Eu imagino que a maioria das pessoas aprenderia a usar rapidamente,positive
+Q8,Eu achei o Flash Dash muito trabalhoso de usar,negative
+Q9,Eu me senti confiante ao usar o Flash Dash,positive
+Q10,Eu precisei aprender muitas coisas antes de usar o Flash Dash,negative

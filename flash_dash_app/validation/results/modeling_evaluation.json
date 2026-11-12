@@ -1,0 +1,89 @@
+{
+  "generated_at": "2026-11-06T14:56:35.504072+00:00",
+  "cases": 8,
+  "case_accuracy": 1.0,
+  "relationship_precision": 1.0,
+  "relationship_recall": 1.0,
+  "structural_accuracy": 1.0,
+  "success_criteria": {
+    "case_accuracy": 1.0,
+    "relationship_precision": 1.0,
+    "relationship_recall": 1.0,
+    "structural_accuracy": 1.0
+  },
+  "approved": true,
+  "results": [
+    {
+      "case": "one_to_many_alias",
+      "expected": 1,
+      "predicted": 1,
+      "true_positives": 1,
+      "exact_match": true,
+      "structural_validity": true,
+      "error": ""
+    },
+    {
+      "case": "one_to_one",
+      "expected": 1,
+      "predicted": 1,
+      "true_positives": 1,
+      "exact_match": true,
+      "structural_validity": true,
+      "error": ""
+    },
+    {
+      "case": "many_to_many",
+      "expected": 1,
+      "predicted": 1,
+      "true_positives": 1,
+      "exact_match": true,
+      "structural_validity": true,
+      "error": ""
+    },
+    {
+      "case": "three_source_star",
+      "expected": 2,
+      "predicted": 2,
+      "true_positives": 2,
+      "exact_match": true,
+      "structural_validity": true,
+      "error": ""
+    },
+    {
+      "case": "numeric_text_keys",
+      "expected": 1,
+      "predicted": 1,
+      "true_positives": 1,
+      "exact_match": true,
+      "structural_validity": true,
+      "error": ""
+    },
+    {
+      "case": "partial_referential_integrity",
+      "expected": 1,
+      "predicted": 1,
+      "true_positives": 1,
+      "exact_match": true,
+      "structural_validity": true,
+      "error": ""
+    },
+    {
+      "case": "generic_id_collision",
+      "expected": 0,
+      "predicted": 0,
+      "true_positives": 0,
+      "exact_match": true,
+      "structural_validity": true,
+      "error": ""
+    },
+    {
+      "case": "disjoint_named_keys",
+      "expected": 0,
+      "predicted": 0,
+      "true_positives": 0,
+      "exact_match": true,
+      "structural_validity": true,
+      "error": ""
+    }
+  ]
+}

@@ -40,29 +40,37 @@ class SelecaoGraficoScreen extends StatelessWidget {
           children: [
             if (isDesktop)
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Qual visualizacao deseja criar?",
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: colorScheme.onSurface,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Qual visualizacao deseja criar?",
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: colorScheme.onSurface,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        "Escolha o visual e personalize antes de inserir no dashboard.",
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: colorScheme.onSurface.withValues(alpha: 0.68),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Escolha o visual e personalize antes de inserir no dashboard.",
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: colorScheme.onSurface.withValues(
+                              alpha: 0.68,
+                            ),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 24),
                   _botaoLogsETL(context),
                 ],
               )
@@ -107,6 +115,7 @@ class SelecaoGraficoScreen extends StatelessWidget {
             builder: (context) => EtlHistoryScreen(
               logsEtl: logs,
               summary: Map<String, dynamic>.from(summary),
+              fonteId: data['fonte']?['id']?.toString(),
             ),
           ),
         );

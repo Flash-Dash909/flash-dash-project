@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../upload/screens/upload_screen.dart';
 
 class ProjetosScreen extends StatelessWidget {
-  final String usuarioNome; // <- ADICIONE ESSA VARIÁVEL
+  final String usuarioNome;
   final String usuarioId;
   const ProjetosScreen({
     super.key,
@@ -12,7 +12,6 @@ class ProjetosScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Dados de exemplo para os projetos
     final meusProjetos = [
       {'nome': 'Performance Q1', 'cor': Colors.blue},
       {'nome': 'Vendas Regionais', 'cor': Colors.green},
@@ -28,29 +27,22 @@ class ProjetosScreen extends StatelessWidget {
         padding: const EdgeInsets.all(16.0),
         child: GridView.builder(
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2, // Número de colunas no grid
-            crossAxisSpacing: 16, // Espaçamento horizontal entre os itens
-            mainAxisSpacing: 16, // Espaçamento vertical entre os itens
+            crossAxisCount: 2,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
           ),
-          // +1 para o botão de "Novo Projeto"
           itemCount: meusProjetos.length + 1,
           itemBuilder: (context, index) {
-            // O primeiro item (index 0) será o botão de "Novo Projeto"
             if (index == 0) {
               return Card(
                 elevation: 4,
                 color: Colors.blue.shade100,
                 child: InkWell(
-                  // Torna o card clicável com efeito visual
                   onTap: () {
-                    // Navega para a tela de Upload
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => UploadScreen(
-                          usuarioNome: usuarioNome,
-                          usuarioId: usuarioId,
-                        ),
+                        builder: (context) => const UploadScreen(),
                       ),
                     );
                   },
@@ -60,8 +52,6 @@ class ProjetosScreen extends StatelessWidget {
                 ),
               );
             } else {
-              // Os outros itens serão cards para os projetos existentes
-              // index - 1 para ajustar ao índice da lista meusProjetos
               final projeto = meusProjetos[index - 1];
               return Card(
                 elevation: 4,

@@ -1,0 +1,4 @@
+matplotlib>=3.8
+psutil>=5.9
+bandit>=1.7.9
+pip-audit>=2.7.3

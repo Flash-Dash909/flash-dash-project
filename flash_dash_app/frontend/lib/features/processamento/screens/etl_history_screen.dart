@@ -5,11 +5,13 @@ import 'star_schema_screen.dart';
 class EtlHistoryScreen extends StatelessWidget {
   final List<dynamic> logsEtl;
   final Map<String, dynamic> summary;
+  final String? fonteId;
 
   const EtlHistoryScreen({
     super.key,
     required this.logsEtl,
     required this.summary,
+    this.fonteId,
   });
 
   IconData _getIcon(String iconName) {
@@ -55,13 +57,13 @@ class EtlHistoryScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDesktop = MediaQuery.of(context).size.width >= 850;
     final horizontalPadding = isDesktop ? 40.0 : 16.0;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('Auditoria ETL'),
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF0F172A),
         elevation: 1,
         shadowColor: Colors.black12,
         actions: [
@@ -76,10 +78,10 @@ class EtlHistoryScreen extends StatelessWidget {
         ],
       ),
       body: logsEtl.isEmpty
-          ? const Center(
+          ? Center(
               child: Text(
                 'Nenhum historico de ETL encontrado.',
-                style: TextStyle(color: Color(0xFF64748B)),
+                style: TextStyle(color: scheme.onSurfaceVariant),
               ),
             )
           : CustomScrollView(
@@ -100,14 +102,14 @@ class EtlHistoryScreen extends StatelessWidget {
                           style: TextStyle(
                             fontSize: isDesktop ? 28 : 22,
                             fontWeight: FontWeight.w800,
-                            color: const Color(0xFF0F172A),
+                            color: scheme.onSurface,
                           ),
                         ),
                         const SizedBox(height: 8),
-                        const Text(
+                        Text(
                           'Cada etapa mostra como a fonte foi extraida, limpa, padronizada e preparada para analise.',
                           style: TextStyle(
-                            color: Color(0xFF64748B),
+                            color: scheme.onSurfaceVariant,
                             height: 1.35,
                           ),
                         ),
@@ -176,9 +178,9 @@ class EtlHistoryScreen extends StatelessWidget {
             horizontalPadding,
             14,
           ),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
+          decoration: BoxDecoration(
+            color: scheme.surface,
+            border: Border(top: BorderSide(color: scheme.outlineVariant)),
           ),
           child: FilledButton.icon(
             onPressed: () => _abrirModeloEstrela(context),
@@ -199,7 +201,8 @@ class EtlHistoryScreen extends StatelessWidget {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => StarSchemaScreen(summary: summary),
+        builder: (context) =>
+            StarSchemaScreen(summary: summary, fonteId: fonteId),
       ),
     );
   }
@@ -220,13 +223,14 @@ class _ResumoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       width: 190,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: scheme.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: scheme.outlineVariant),
       ),
       child: Row(
         children: [
@@ -245,15 +249,15 @@ class _ResumoCard extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
-                    color: Color(0xFF64748B),
+                  style: TextStyle(
+                    color: scheme.onSurfaceVariant,
                     fontSize: 12,
                   ),
                 ),
                 Text(
                   value,
-                  style: const TextStyle(
-                    color: Color(0xFF0F172A),
+                  style: TextStyle(
+                    color: scheme.onSurface,
                     fontSize: 22,
                     fontWeight: FontWeight.w800,
                   ),
@@ -286,6 +290,7 @@ class _TimelineItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -315,7 +320,7 @@ class _TimelineItem extends StatelessWidget {
                     child: Container(
                       width: 2,
                       margin: const EdgeInsets.symmetric(vertical: 6),
-                      color: const Color(0xFFE2E8F0),
+                      color: scheme.outlineVariant,
                     ),
                   ),
               ],
@@ -326,9 +331,9 @@ class _TimelineItem extends StatelessWidget {
               margin: const EdgeInsets.only(left: 12, bottom: 18),
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: scheme.surface,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
+                border: Border.all(color: scheme.outlineVariant),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -357,9 +362,9 @@ class _TimelineItem extends StatelessWidget {
                       Expanded(
                         child: Text(
                           title,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.w800,
-                            color: Color(0xFF0F172A),
+                            color: scheme.onSurface,
                           ),
                         ),
                       ),
@@ -369,8 +374,8 @@ class _TimelineItem extends StatelessWidget {
                     const SizedBox(height: 10),
                     Text(
                       description,
-                      style: const TextStyle(
-                        color: Color(0xFF475569),
+                      style: TextStyle(
+                        color: scheme.onSurfaceVariant,
                         height: 1.42,
                       ),
                     ),

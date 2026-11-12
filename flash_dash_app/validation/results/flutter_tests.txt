@@ -1,0 +1,18 @@
+00:00 +0: loading C:/VScode/flash-dash-repository/flash_dash_app/frontend/test/responsive_matrix_test.dart
+00:00 +0: C:/VScode/flash-dash-repository/flash_dash_app/frontend/test/responsive_matrix_test.dart: telas criticas sem overflow em mobile pequeno
+00:01 +1: C:/VScode/flash-dash-repository/flash_dash_app/frontend/test/responsive_matrix_test.dart: telas criticas sem overflow em mobile pequeno
+00:01 +2: C:/VScode/flash-dash-repository/flash_dash_app/frontend/test/responsive_matrix_test.dart: telas criticas sem overflow em mobile pequeno
+00:01 +3: C:/VScode/flash-dash-repository/flash_dash_app/frontend/test/widget_test.dart: Home mantém configuracoes, perfil e fontes funcionais
+00:02 +4: C:/VScode/flash-dash-repository/flash_dash_app/frontend/test/responsive_matrix_test.dart: telas criticas sem overflow em mobile
+00:02 +5: C:/VScode/flash-dash-repository/flash_dash_app/frontend/test/widget_test.dart: Login e cadastro mantem contraste no tema escuro
+00:02 +6: C:/VScode/flash-dash-repository/flash_dash_app/frontend/test/responsive_matrix_test.dart: telas criticas sem overflow em mobile grande
+00:02 +7: C:/VScode/flash-dash-repository/flash_dash_app/frontend/test/widget_test.dart: Perfil e configuracoes abrem no celular em tema escuro
+00:02 +8: C:/VScode/flash-dash-repository/flash_dash_app/frontend/test/responsive_matrix_test.dart: telas criticas sem overflow em tablet retrato
+00:02 +9: C:/VScode/flash-dash-repository/flash_dash_app/frontend/test/responsive_matrix_test.dart: telas criticas sem overflow em tablet retrato
+00:02 +10: C:/VScode/flash-dash-repository/flash_dash_app/frontend/test/responsive_matrix_test.dart: telas criticas sem overflow em tablet retrato
+00:03 +11: C:/VScode/flash-dash-repository/flash_dash_app/frontend/test/responsive_matrix_test.dart: telas criticas sem overflow em tablet paisagem
+00:03 +12: C:/VScode/flash-dash-repository/flash_dash_app/frontend/test/responsive_matrix_test.dart: telas criticas sem overflow em desktop
+00:03 +13: C:/VScode/flash-dash-repository/flash_dash_app/frontend/test/responsive_matrix_test.dart: telas criticas sem overflow em desktop amplo
+00:03 +14: C:/VScode/flash-dash-repository/flash_dash_app/frontend/test/responsive_matrix_test.dart: metricas suporta texto ampliado em celular
+00:04 +15: All tests passed!
+

@@ -6,18 +6,32 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../../../core/app_theme_controller.dart';
+import '../../../core/api_config.dart';
 import '../../../core/calculated_metric.dart';
 import '../../../core/widgets/app_logo.dart';
 import '../../auth/screens/login_screen.dart';
 import '../../upload/screens/upload_screen.dart';
 import '../../dashboard/dashboard_manager.dart';
 import '../../dashboard/screens/dashboard_canvas_screen.dart';
+import '../../fontes/screens/fontes_dados_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _ConditionalExpanded extends StatelessWidget {
+  final bool expanded;
+  final Widget child;
+
+  const _ConditionalExpanded({required this.expanded, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return expanded ? Expanded(child: child) : child;
+  }
 }
 
 class _HomeScreenState extends State<HomeScreen> {
@@ -35,7 +49,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _perfilEditando = false;
   String? _fotoPerfil;
 
-  String get _baseUrl => 'https://flash-dash-project-7.onrender.com';
+  String get _baseUrl => ApiConfig.baseUrl;
 
   @override
   void initState() {
@@ -90,6 +104,7 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final response = await http.get(
         Uri.parse('$_baseUrl/auth/perfil/$usuarioId'),
+        headers: DashboardManager.authHeaders,
       );
       if (!mounted) return;
       if (response.statusCode == 200) {
@@ -132,7 +147,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final usuarioId = DashboardManager.usuarioAtualId;
     if (usuarioId == null || usuarioId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Usuario não encontrado para salvar.')),
+        const SnackBar(content: Text('Usuário não encontrado para salvar.')),
       );
       return;
     }
@@ -142,7 +157,10 @@ class _HomeScreenState extends State<HomeScreen> {
       final idadeTexto = _idadePerfilController.text.trim();
       final response = await http.put(
         Uri.parse('$_baseUrl/auth/perfil/$usuarioId'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          ...DashboardManager.authHeaders,
+        },
         body: json.encode({
           'nome': _nomePerfilController.text.trim(),
           'idade': idadeTexto.isEmpty ? null : int.tryParse(idadeTexto),
@@ -190,6 +208,7 @@ class _HomeScreenState extends State<HomeScreen> {
     DashboardManager.dadosFonteAtual = null;
     DashboardManager.dashboardAtualId = null;
     DashboardManager.usuarioAtualId = null;
+    DashboardManager.tokenAutenticacao = null;
     DashboardManager.usuarioAtualNome = null;
     DashboardManager.usuarioAtualEmail = null;
     DashboardManager.usuarioAtualIdade = null;
@@ -206,13 +225,22 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // ==========================================
+  // BUSCA OS DASHBOARDS DO BACKEND (SUPABASE)
+  // ==========================================
   Future<List<dynamic>> _buscarDashboards() async {
     try {
       final usuarioId = DashboardManager.usuarioAtualId;
-      final url = usuarioId == null
-          ? 'https://flash-dash-project-7.onrender.com/listar-dashboards'
-          : 'https://flash-dash-project-7.onrender.com/listar-dashboards?usuario_id=$usuarioId';
-      var response = await http.get(Uri.parse(url));
+      if (usuarioId == null || DashboardManager.tokenAutenticacao == null) {
+        return [];
+      }
+      final url = Uri.parse(
+        '$_baseUrl/listar-dashboards',
+      ).replace(queryParameters: {'usuario_id': usuarioId}).toString();
+      var response = await http.get(
+        Uri.parse(url),
+        headers: DashboardManager.authHeaders,
+      );
       if (response.statusCode == 200) {
         return json.decode(utf8.decode(response.bodyBytes));
       }
@@ -222,10 +250,16 @@ class _HomeScreenState extends State<HomeScreen> {
     return [];
   }
 
+  // BUSCA OS LOGS DO BACKEND
   Future<List<dynamic>> _buscarLogsETL() async {
     try {
+      if (DashboardManager.usuarioAtualId == null ||
+          DashboardManager.tokenAutenticacao == null) {
+        return [];
+      }
       var response = await http.get(
-        Uri.parse('https://flash-dash-project-7.onrender.com/listar-logs-etl'),
+        Uri.parse('$_baseUrl/listar-logs-etl'),
+        headers: DashboardManager.authHeaders,
       );
       if (response.statusCode == 200) {
         return json.decode(utf8.decode(response.bodyBytes));
@@ -246,7 +280,56 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Future<void> _conectarNovaFonte() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const UploadScreen()),
+    );
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _restaurarFonteDoDashboard(
+    Map<String, dynamic> dashboard,
+  ) async {
+    final rawIds = dashboard['fonte_ids'];
+    if (rawIds is! List || rawIds.isEmpty) return;
+    final sourceId = rawIds.first?.toString();
+    if (sourceId == null || sourceId.isEmpty) return;
+
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/fontes-dados/$sourceId'),
+        headers: DashboardManager.authHeaders,
+      );
+      if (response.statusCode != 200) return;
+      final decoded = json.decode(utf8.decode(response.bodyBytes));
+      if (decoded is! Map) return;
+      final source = Map<String, dynamic>.from(decoded);
+      final summary = source['summary'] is Map
+          ? Map<String, dynamic>.from(source['summary'])
+          : <String, dynamic>{};
+      final records =
+          source['dados_limpos'] ?? source['dados_brutos'] ?? const [];
+      DashboardManager.dadosFonteAtual = {
+        'status': 'sucesso',
+        'fonte': source,
+        'dados_planilha': {
+          'status': 'success',
+          'summary': summary,
+          'dados_brutos': records,
+          'dados_limpos': records,
+          'etl_logs': source['etl_logs'] ?? const [],
+          'modelo_estrela':
+              source['modelo_estrela'] ?? summary['modelo_estrela'],
+        },
+      };
+    } catch (error) {
+      debugPrint('Nao foi possivel restaurar a fonte do dashboard: $error');
+    }
+  }
+
   Widget _buildFotoPerfil(double radius) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final foto = _fotoPerfil;
     ImageProvider? imageProvider;
 
@@ -264,7 +347,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return CircleAvatar(
       radius: radius,
-      backgroundColor: const Color(0xFFEFF6FF),
+      backgroundColor: isDark
+          ? const Color(0xFF172554)
+          : const Color(0xFFEFF6FF),
       backgroundImage: imageProvider,
       child: imageProvider == null
           ? Icon(Icons.person, color: const Color(0xFF2563EB), size: radius)
@@ -303,7 +388,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 16),
           _buildMenuItem(Icons.dashboard_rounded, "Dashboards", 0),
           _buildMenuItem(Icons.receipt_long_rounded, "Logs ETL", 1),
-          _buildMenuItem(Icons.dataset_rounded, "Fontes de Dados", 4), // Nova aba
+          _buildMenuItem(Icons.dataset_rounded, "Fontes de Dados", 4),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
             child: Text(
@@ -319,17 +404,9 @@ class _HomeScreenState extends State<HomeScreen> {
           _buildMenuItem(Icons.person_outline_rounded, "Perfil", 3),
           const Spacer(),
           _buildMenuItem(Icons.logout_rounded, "Sair", -1),
-          // Fundo de destaque para o Perfil
-          Container(
+          const Divider(height: 1),
+          Padding(
             padding: const EdgeInsets.all(16.0),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
-              border: Border(
-                top: BorderSide(
-                  color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-                ),
-              ),
-            ),
             child: Row(
               children: [
                 _buildFotoPerfil(20),
@@ -425,21 +502,11 @@ class _HomeScreenState extends State<HomeScreen> {
           ? AppBar(title: const AppLogo(size: 34, showText: true))
           : null,
       drawer: !isDesktop ? Drawer(child: _buildSidebar()) : null,
-      
-      // Floating Action Button consolidado (Mobile e Desktop)
-      floatingActionButton: _indiceSelecionado == 0 || _indiceSelecionado == 4
-          ? FloatingActionButton.extended(
-              onPressed: _iniciarNovoDashboard,
-              backgroundColor: const Color(0xFF2563EB),
-              foregroundColor: Colors.white,
-              icon: const Icon(Icons.add),
-              label: Text(_indiceSelecionado == 0 ? "Novo" : "Conectar"),
-            )
-          : null,
 
       body: Row(
         children: [
           if (isDesktop) _buildSidebar(),
+
           Expanded(
             child: _indiceSelecionado == 0
                 ? _buildTelaDashboards(isDesktop, paddingGlobal)
@@ -457,7 +524,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ==========================================
-  // ABA 0: TELA DOS DASHBOARDS
+  // ABA 0: TELA DOS DASHBOARDS (COM PRÉ-VISUALIZAÇÃO)
   // ==========================================
   Widget _buildTelaDashboards(bool isDesktop, double paddingGlobal) {
     final theme = Theme.of(context);
@@ -487,22 +554,25 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                "Meus Dashboards",
-                style: TextStyle(
-                  fontSize: isDesktop ? 28 : 20,
-                  fontWeight: FontWeight.bold,
-                  color: colorScheme.onSurface,
+              Expanded(
+                child: Text(
+                  "Meus Dashboards",
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: isDesktop ? 28 : 20,
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.onSurface,
+                  ),
                 ),
               ),
-              if (isDesktop) // O botão principal na AppBar fica só no Desktop
-                ElevatedButton.icon(
-                  onPressed: _iniciarNovoDashboard,
-                  icon: const Icon(Icons.add),
-                  label: const Text("Novo Dashboard"),
-                ),
+              const SizedBox(width: 12),
+              ElevatedButton.icon(
+                onPressed: _iniciarNovoDashboard,
+                icon: const Icon(Icons.add),
+                label: Text(isDesktop ? "Novo Dashboard" : "Novo"),
+              ),
             ],
           ),
         ),
@@ -518,24 +588,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
               if (dashboards.isEmpty) {
                 return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.dashboard_customize_outlined,
-                        size: 80,
-                        color: Colors.blueGrey.shade200,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        "Nenhum dashboard salvo na nuvem ainda.\nClique em Novo para começar!",
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.blueGrey.shade500,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    "Nenhum dashboard salvo na nuvem ainda.\nClique em Novo Dashboard para começar!",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.blueGrey.shade400,
+                      fontSize: 16,
+                    ),
                   ),
                 );
               }
@@ -546,7 +605,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   crossAxisCount: crossAxisCount,
                   crossAxisSpacing: 24,
                   mainAxisSpacing: 24,
-                  childAspectRatio: isDesktop ? 1.2 : 1.5, 
+                  childAspectRatio: isDesktop
+                      ? 1.2
+                      : 1.5, // Ajustado para dar mais espaço à capa
                 ),
                 itemCount: dashboards.length,
                 itemBuilder: (context, index) {
@@ -560,6 +621,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // ==========================================
+  // CARD DO DASHBOARD (A PRÉ-VISUALIZAÇÃO ACONTECE AQUI)
+  // ==========================================
   Color _corDoBanco(dynamic valor, [Color fallback = Colors.white]) {
     if (valor == null) return fallback;
     if (valor is int) return Color(valor);
@@ -626,7 +690,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       final response = await http.delete(
-        Uri.parse("https://flash-dash-project-7.onrender.com/dashboards/${dash['id']}"),
+        Uri.parse("$_baseUrl/dashboards/${dash['id']}"),
+        headers: DashboardManager.authHeaders,
       );
       if (!mounted) return;
       if (response.statusCode == 200) {
@@ -650,28 +715,35 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildDashboardCard(Map<String, dynamic> dash) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     String dataFormatada = "Atualizado recentemente";
     if (dash['created_at'] != null) {
       try {
         DateTime dt = DateTime.parse(dash['created_at']).toLocal();
         dataFormatada =
             "${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}";
-      } catch (e) {}
+      } catch (error) {
+        debugPrint('Data inválida no dashboard: $error');
+      }
     }
 
     List<dynamic> configDoBanco = dash['graficos_config'] ?? [];
 
     return Card(
-      clipBehavior: Clip.antiAlias,
+      clipBehavior:
+          Clip.antiAlias, // Impede que a capa vaze pelas bordas arredondadas
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: Color(0xFFE2E8F0), width: 1.5),
+        side: BorderSide(color: colorScheme.outlineVariant, width: 1.5),
       ),
       child: InkWell(
         onTap: () {
           DashboardManager.graficosAtivos.clear();
           DashboardManager.metricasCalculadas.clear();
+          DashboardManager.dadosFonteAtual = null;
           DashboardManager.dashboardAtualId = dash['id']?.toString();
 
           final metricasDoBanco = dash['metricas_calculadas'];
@@ -714,7 +786,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
             DashboardManager.graficosAtivos.add(
               ChartConfig(
-                id: item['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+                id:
+                    item['id'] ??
+                    DateTime.now().millisecondsSinceEpoch.toString(),
                 tipo: item['tipo'],
                 titulo: item['titulo'],
                 dimensao: item['dimensao'] ?? '',
@@ -747,19 +821,27 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             );
           }
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const DashboardCanvasScreen(),
-            ),
-          );
+          _restaurarFonteDoDashboard(dash).whenComplete(() {
+            if (!mounted) return;
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const DashboardCanvasScreen(),
+              ),
+            );
+          });
         },
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // ==========================================
+            // 1. ÁREA DA CAPA (PRÉ-VISUALIZAÇÃO WIREFRAME)
+            // ==========================================
             Expanded(
               child: Container(
-                color: const Color(0xFFF1F5F9),
+                color: const Color(
+                  0xFFF1F5F9,
+                ), // Fundo acinzentado simulando o Canvas
                 padding: EdgeInsets.zero,
                 child: configDoBanco.isEmpty
                     ? Center(
@@ -779,12 +861,20 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
               ),
             ),
+            // ==========================================
+            // 2. RODAPÉ (TÍTULO E DATA)
+            // ==========================================
             Container(
               padding: const EdgeInsets.all(16),
-              decoration: const BoxDecoration(
-                color: Colors.white,
+              decoration: BoxDecoration(
+                color: colorScheme.surface,
                 border: Border(
-                  top: BorderSide(color: Color(0xFFE2E8F0), width: 1),
+                  top: BorderSide(
+                    color: isDark
+                        ? const Color(0xFF334155)
+                        : const Color(0xFFE2E8F0),
+                    width: 1,
+                  ),
                 ),
               ),
               child: Column(
@@ -795,10 +885,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       Expanded(
                         child: Text(
                           dash['titulo'] ?? 'Sem Título',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
-                            color: Color(0xFF0F172A),
+                            color: colorScheme.onSurface,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -843,172 +933,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ==========================================
-  // ABA: TELA DE FONTES DE DADOS (Com Barra de Pesquisa)
+  // ABA 1: TELA DAS FONTES DE DADOS
   // ==========================================
   Widget _buildTelaFontesDeDados(bool isDesktop, double paddingGlobal) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: paddingGlobal,
-            vertical: isDesktop ? 24 : 16,
-          ),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            border: Border(
-              bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1),
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                "Fontes de Dados",
-                style: TextStyle(
-                  fontSize: isDesktop ? 28 : 20,
-                  fontWeight: FontWeight.bold,
-                  color: const Color(0xFF0F172A),
-                ),
-              ),
-              if (isDesktop)
-                ElevatedButton.icon(
-                  onPressed: _iniciarNovoDashboard,
-                  icon: const Icon(Icons.link),
-                  label: const Text("Conectar Nova Fonte"),
-                ),
-            ],
-          ),
-        ),
-        // BARRA DE PESQUISA ADICIONADA
-        Padding(
-          padding: EdgeInsets.fromLTRB(paddingGlobal, 16, paddingGlobal, 8),
-          child: TextField(
-            decoration: InputDecoration(
-              hintText: 'Buscar fonte de dados...',
-              prefixIcon: const Icon(Icons.search, color: Color(0xFF64748B)),
-              filled: true,
-              fillColor: const Color(0xFFF1F5F9),
-              contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-            ),
-          ),
-        ),
-        Expanded(
-          child: DashboardManager.fontesSalvas.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.dataset_linked_outlined, size: 60, color: Colors.blueGrey.shade200),
-                      const SizedBox(height: 16),
-                      Text(
-                        "Nenhuma fonte de dados conectada.",
-                        style: TextStyle(
-                          color: Colors.blueGrey.shade500,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ],
-                  )
-                )
-              : ListView.builder(
-                  padding: EdgeInsets.all(paddingGlobal),
-                  itemCount: DashboardManager.fontesSalvas.length,
-                  itemBuilder: (context, index) {
-                    final fonte = DashboardManager.fontesSalvas[index];
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: const BorderSide(color: Color(0xFFE2E8F0)),
-                      ),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 12,
-                        ),
-                        leading: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.green.shade50,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Icon(
-                            Icons.table_view_rounded,
-                            color: Colors.green.shade600,
-                          ),
-                        ),
-                        title: Text(
-                          fonte['nome']!,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                        subtitle: Padding(
-                          padding: const EdgeInsets.only(top: 8.0),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.calendar_today,
-                                size: 14,
-                                color: Colors.blueGrey.shade400,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                fonte['data']!,
-                                style: TextStyle(
-                                  color: Colors.blueGrey.shade600,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Icon(
-                                Icons.folder_open,
-                                size: 14,
-                                color: Colors.blueGrey.shade400,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                fonte['tamanho']!,
-                                style: TextStyle(
-                                  color: Colors.blueGrey.shade600,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        trailing: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFEFF6FF),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            fonte['status']!,
-                            style: const TextStyle(
-                              color: Color(0xFF2563EB),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-        ),
-      ],
-    );
+    return FontesDadosScreen(onConectar: _conectarNovaFonte);
   }
 
   // ==========================================
@@ -1026,8 +954,9 @@ class _HomeScreenState extends State<HomeScreen> {
       if (fase.contains('Filtragem')) return Icons.filter_alt_rounded;
       if (fase.contains('Padronização')) return Icons.spellcheck_rounded;
       if (fase.contains('Modelagem')) return Icons.account_tree_rounded;
-      if (fase.contains('Carga') || fase.contains('Load'))
+      if (fase.contains('Carga') || fase.contains('Load')) {
         return Icons.check_circle_rounded;
+      }
       return Icons.info_outline;
     }
 
@@ -1075,21 +1004,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
               if (fontes.isEmpty) {
                 return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.history_edu_outlined, size: 60, color: Colors.blueGrey.shade200),
-                      const SizedBox(height: 16),
-                      Text(
-                        "Nenhum log de ETL encontrado.\nFaça o upload de uma planilha para gerar auditorias.",
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.blueGrey.shade400,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ]
-                  )
+                  child: Text(
+                    "Nenhum log de ETL encontrado.\nFaça o upload de uma planilha para gerar auditorias.",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.blueGrey.shade400,
+                      fontSize: 16,
+                    ),
+                  ),
                 );
               }
 
@@ -1108,14 +1030,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       ).toLocal();
                       dataFormatada =
                           "${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} às ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
-                    } catch (e) {}
+                    } catch (error) {
+                      debugPrint('Data inválida no log ETL: $error');
+                    }
                   }
 
                   return Card(
                     margin: const EdgeInsets.only(bottom: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
-                      side: const BorderSide(color: Color(0xFFE2E8F0)),
+                      side: BorderSide(color: colorScheme.outlineVariant),
                     ),
                     elevation: 0,
                     child: Theme(
@@ -1130,7 +1054,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         leading: Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: Colors.indigo.shade50,
+                            color: isDark
+                                ? const Color(0xFF172554)
+                                : Colors.indigo.shade50,
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Icon(
@@ -1154,7 +1080,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         children: [
                           Container(
-                            color: const Color(0xFFF8FAFC),
+                            color: isDark
+                                ? const Color(0xFF0F172A)
+                                : const Color(0xFFF8FAFC),
                             padding: const EdgeInsets.all(24),
                             child: logs.isEmpty
                                 ? const Text(
@@ -1183,19 +1111,19 @@ class _HomeScreenState extends State<HomeScreen> {
                                                 children: [
                                                   Text(
                                                     log['fase'] ?? 'Etapa',
-                                                    style: const TextStyle(
+                                                    style: TextStyle(
                                                       fontWeight:
                                                           FontWeight.bold,
-                                                      color: Color(0xFF0F172A),
+                                                      color:
+                                                          colorScheme.onSurface,
                                                     ),
                                                   ),
                                                   const SizedBox(height: 4),
                                                   Text(
                                                     log['descricao'] ?? '',
                                                     style: TextStyle(
-                                                      color: Colors
-                                                          .blueGrey
-                                                          .shade700,
+                                                      color: colorScheme
+                                                          .onSurfaceVariant,
                                                       fontSize: 13,
                                                     ),
                                                   ),
@@ -1221,11 +1149,481 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Omitido para não estourar limite, o restante das telas Settings e Profile permanecem inalteradas, pois já estavam muito boas.
-  // ... (Insira o resto da Home aqui se necessário)
+  Widget _buildTelaConfiguracoes(bool isDesktop, double paddingGlobal) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildCabecalhoSecao(
+          titulo: 'Configuracoes',
+          subtitulo: 'Preferencias gerais do workspace',
+          paddingGlobal: paddingGlobal,
+          isDesktop: isDesktop,
+        ),
+        Expanded(
+          child: ListView(
+            padding: EdgeInsets.all(paddingGlobal),
+            children: [
+              _buildPainel(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Workspace',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    SwitchListTile(
+                      value: true,
+                      onChanged: (_) {},
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Salvar dashboards na nuvem'),
+                      subtitle: const Text(
+                        'Mantem seus dashboards vinculados ao usuario atual.',
+                      ),
+                    ),
+                    SwitchListTile(
+                      value: true,
+                      onChanged: (_) {},
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Mostrar pre-visualizacao na home'),
+                      subtitle: const Text(
+                        'Usa a composicao real dos graficos como capa.',
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      'Tema',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    ValueListenableBuilder<ThemeMode>(
+                      valueListenable: AppThemeController.themeMode,
+                      builder: (context, themeMode, _) {
+                        return LayoutBuilder(
+                          builder: (context, constraints) {
+                            return SegmentedButton<ThemeMode>(
+                              direction: constraints.maxWidth < 420
+                                  ? Axis.vertical
+                                  : Axis.horizontal,
+                              selected: {themeMode},
+                              onSelectionChanged: (selection) {
+                                AppThemeController.themeMode.value =
+                                    selection.first;
+                              },
+                              segments: const [
+                                ButtonSegment(
+                                  value: ThemeMode.system,
+                                  icon: Icon(Icons.brightness_auto_outlined),
+                                  label: Text('Sistema'),
+                                ),
+                                ButtonSegment(
+                                  value: ThemeMode.light,
+                                  icon: Icon(Icons.light_mode_outlined),
+                                  label: Text('Claro'),
+                                ),
+                                ButtonSegment(
+                                  value: ThemeMode.dark,
+                                  icon: Icon(Icons.dark_mode_outlined),
+                                  label: Text('Escuro'),
+                                ),
+                              ],
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 
-  Widget _buildTelaConfiguracoes(bool isDesktop, double paddingGlobal) { /* Sem alterações necessárias */ return Container(); }
-  Widget _buildTelaPerfil(bool isDesktop, double paddingGlobal) { /* Sem alterações necessárias */ return Container(); }
+  Widget _buildTelaPerfil(bool isDesktop, double paddingGlobal) {
+    final larguraCampo = isDesktop ? 320.0 : double.infinity;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildCabecalhoSecao(
+          titulo: 'Perfil',
+          subtitulo: 'Dados pessoais e identidade do workspace',
+          paddingGlobal: paddingGlobal,
+          isDesktop: isDesktop,
+          acao: _perfilEditando
+              ? Row(
+                  children: [
+                    TextButton(
+                      onPressed: _perfilSalvando
+                          ? null
+                          : () {
+                              setState(() {
+                                _perfilEditando = false;
+                                _preencherPerfilLocal();
+                              });
+                            },
+                      child: const Text('Cancelar'),
+                    ),
+                    const SizedBox(width: 12),
+                    ElevatedButton.icon(
+                      onPressed: _perfilSalvando ? null : _salvarPerfil,
+                      icon: _perfilSalvando
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.save_outlined),
+                      label: const Text('Salvar'),
+                    ),
+                  ],
+                )
+              : ElevatedButton.icon(
+                  onPressed: () => setState(() => _perfilEditando = true),
+                  icon: const Icon(Icons.edit_outlined),
+                  label: const Text('Editar perfil'),
+                ),
+        ),
+        Expanded(
+          child: _perfilCarregando
+              ? const Center(child: CircularProgressIndicator())
+              : SingleChildScrollView(
+                  padding: EdgeInsets.all(paddingGlobal),
+                  child: Form(
+                    key: _perfilFormKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildPainel(
+                          child: Flex(
+                            direction: isDesktop
+                                ? Axis.horizontal
+                                : Axis.vertical,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Column(
+                                children: [
+                                  _buildFotoPerfil(isDesktop ? 58 : 48),
+                                  const SizedBox(height: 16),
+                                  OutlinedButton.icon(
+                                    onPressed: _selecionarFotoPerfil,
+                                    icon: const Icon(
+                                      Icons.add_photo_alternate_outlined,
+                                    ),
+                                    label: const Text('Alterar foto'),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(width: isDesktop ? 36 : 0, height: 24),
+                              _ConditionalExpanded(
+                                expanded: isDesktop,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Wrap(
+                                      spacing: 18,
+                                      runSpacing: 18,
+                                      children: [
+                                        _buildCampoPerfil(
+                                          controller: _nomePerfilController,
+                                          label: 'Nome',
+                                          icon: Icons.badge_outlined,
+                                          largura: larguraCampo,
+                                          obrigatorio: true,
+                                        ),
+                                        _buildCampoPerfil(
+                                          initialValue:
+                                              DashboardManager
+                                                  .usuarioAtualEmail ??
+                                              '',
+                                          label: 'E-mail',
+                                          icon: Icons.email_outlined,
+                                          largura: larguraCampo,
+                                          editavel: false,
+                                        ),
+                                        _buildCampoPerfil(
+                                          controller: _idadePerfilController,
+                                          label: 'Idade',
+                                          icon: Icons.cake_outlined,
+                                          largura: larguraCampo,
+                                          teclado: TextInputType.number,
+                                          validaNumero: true,
+                                        ),
+                                        _buildCampoPerfil(
+                                          controller: _telefonePerfilController,
+                                          label: 'Telefone',
+                                          icon: Icons.phone_outlined,
+                                          largura: larguraCampo,
+                                        ),
+                                        _buildCampoPerfil(
+                                          controller: _cargoPerfilController,
+                                          label: 'Cargo',
+                                          icon: Icons.work_outline,
+                                          largura: larguraCampo,
+                                        ),
+                                        _buildCampoPerfil(
+                                          controller: _empresaPerfilController,
+                                          label: 'Empresa',
+                                          icon: Icons.business_outlined,
+                                          largura: larguraCampo,
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 18),
+                                    _buildCampoPerfil(
+                                      controller: _bioPerfilController,
+                                      label: 'Bio',
+                                      icon: Icons.notes_outlined,
+                                      largura: isDesktop
+                                          ? 658
+                                          : double.infinity,
+                                      maxLines: 4,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Wrap(
+                          spacing: 16,
+                          runSpacing: 16,
+                          children: [
+                            _buildResumoPerfil(
+                              icone: Icons.dashboard_customize_outlined,
+                              titulo: 'Dashboards',
+                              valor:
+                                  '${DashboardManager.dashboardsSalvos.length}',
+                            ),
+                            _buildResumoPerfil(
+                              icone: Icons.table_chart_outlined,
+                              titulo: 'Fontes na sessao',
+                              valor: '${DashboardManager.fontesSalvas.length}',
+                            ),
+                            _buildResumoPerfil(
+                              icone: Icons.verified_user_outlined,
+                              titulo: 'Conta',
+                              valor: DashboardManager.usuarioAtualId == null
+                                  ? 'Local'
+                                  : 'Conectada',
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCabecalhoSecao({
+    required String titulo,
+    required String subtitulo,
+    required double paddingGlobal,
+    required bool isDesktop,
+    Widget? acao,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final textos = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          titulo,
+          style: TextStyle(
+            fontSize: isDesktop ? 28 : 20,
+            fontWeight: FontWeight.bold,
+            color: colorScheme.onSurface,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          subtitulo,
+          style: TextStyle(
+            color: colorScheme.onSurface.withValues(alpha: 0.64),
+          ),
+        ),
+      ],
+    );
+
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: paddingGlobal,
+        vertical: isDesktop ? 24 : 16,
+      ),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        border: Border(
+          bottom: BorderSide(
+            color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+            width: 1,
+          ),
+        ),
+      ),
+      child: !isDesktop && acao != null
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                textos,
+                const SizedBox(height: 12),
+                Align(alignment: Alignment.centerRight, child: acao),
+              ],
+            )
+          : Row(
+              children: [
+                Expanded(child: textos),
+                ...<Widget?>[acao].whereType<Widget>(),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildPainel({required Widget child}) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.16 : 0.04),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+
+  Widget _buildCampoPerfil({
+    TextEditingController? controller,
+    String? initialValue,
+    required String label,
+    required IconData icon,
+    required double largura,
+    bool editavel = true,
+    bool obrigatorio = false,
+    bool validaNumero = false,
+    int maxLines = 1,
+    TextInputType? teclado,
+  }) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    return SizedBox(
+      width: largura,
+      child: TextFormField(
+        controller: controller,
+        initialValue: controller == null ? initialValue : null,
+        enabled: editavel && _perfilEditando,
+        maxLines: maxLines,
+        keyboardType: teclado,
+        validator: (value) {
+          final texto = value?.trim() ?? '';
+          if (obrigatorio && texto.length < 2) {
+            return 'Informe ao menos 2 letras';
+          }
+          if (validaNumero && texto.isNotEmpty) {
+            final idade = int.tryParse(texto);
+            if (idade == null || idade < 0 || idade > 130) {
+              return 'Informe uma idade valida';
+            }
+          }
+          return null;
+        },
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: Icon(icon),
+          filled: true,
+          fillColor: _perfilEditando && editavel
+              ? theme.colorScheme.surfaceContainerHighest
+              : isDark
+              ? const Color(0xFF0F172A)
+              : const Color(0xFFF8FAFC),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: theme.colorScheme.outlineVariant),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResumoPerfil({
+    required IconData icone,
+    required String titulo,
+    required String valor,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return SizedBox(
+      width: 220,
+      child: _buildPainel(
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? const Color(0xFF172554)
+                    : const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icone, color: const Color(0xFF2563EB)),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    titulo,
+                    style: TextStyle(
+                      color: scheme.onSurfaceVariant,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    valor,
+                    style: TextStyle(
+                      color: scheme.onSurface,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _DashboardPreviewPainter extends CustomPainter {
@@ -1299,11 +1697,67 @@ class _DashboardPreviewPainter extends CustomPainter {
   }
 
   void _desenharBarras(Canvas canvas, Rect rect, List<dynamic> dados) {
-    // ... Implementação inalterada do painter
+    final valores = dados
+        .map((item) => ((item['value'] ?? 0) as num).toDouble())
+        .where((valor) => valor > 0)
+        .toList();
+    if (valores.isEmpty) return;
+
+    final maxValor = valores.reduce(math.max);
+    final quantidade = math.min(dados.length, 8);
+    final gap = rect.width * 0.04;
+    final barWidth = (rect.width - gap * (quantidade - 1)) / quantidade;
+
+    for (int i = 0; i < quantidade; i++) {
+      final item = dados[i];
+      final valor = ((item['value'] ?? 0) as num).toDouble();
+      final altura = maxValor == 0 ? 0.0 : (valor / maxValor) * rect.height;
+      final left = rect.left + i * (barWidth + gap);
+      final barRect = Rect.fromLTWH(
+        left,
+        rect.bottom - altura,
+        barWidth,
+        altura,
+      );
+      final color = resolverCor(item['color'], const Color(0xFF3B82F6));
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(barRect, const Radius.circular(3)),
+        Paint()..color = color,
+      );
+    }
   }
 
   void _desenharPizza(Canvas canvas, Rect rect, List<dynamic> dados) {
-     // ... Implementação inalterada do painter
+    final valores = dados
+        .map((item) => ((item['value'] ?? 0) as num).toDouble())
+        .where((valor) => valor > 0)
+        .toList();
+    if (valores.isEmpty) return;
+
+    final total = valores.fold<double>(0, (soma, valor) => soma + valor);
+    final tamanho = math.min(rect.width, rect.height);
+    final pieRect = Rect.fromCenter(
+      center: rect.center,
+      width: tamanho,
+      height: tamanho,
+    );
+
+    double inicio = -math.pi / 2;
+    for (final item in dados.take(8)) {
+      final valor = ((item['value'] ?? 0) as num).toDouble();
+      if (valor <= 0) continue;
+
+      final sweep = (valor / total) * math.pi * 2;
+      canvas.drawArc(
+        pieRect,
+        inicio,
+        sweep,
+        true,
+        Paint()..color = resolverCor(item['color'], const Color(0xFF3B82F6)),
+      );
+      inicio += sweep;
+    }
   }
 
   @override

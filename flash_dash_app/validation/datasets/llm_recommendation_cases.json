@@ -1,0 +1,196 @@
+[
+  {
+    "id": "LLM-01",
+    "scenario": "Evolucao mensal de faturamento",
+    "summary": {
+      "dimensoes": ["Mes"],
+      "metricas": ["Faturamento"],
+      "colunas_data": ["Mes"]
+    },
+    "sample": [
+      {"Mes": "2026-01", "Faturamento": 120000},
+      {"Mes": "2026-02", "Faturamento": 148000}
+    ],
+    "accepted_visuals": ["Grafico de Linha", "Grafico de Area"]
+  },
+  {
+    "id": "LLM-02",
+    "scenario": "Comparacao de receita por produto",
+    "summary": {
+      "dimensoes": ["Produto"],
+      "metricas": ["Receita"],
+      "colunas_data": []
+    },
+    "sample": [
+      {"Produto": "A", "Receita": 42000},
+      {"Produto": "B", "Receita": 27000}
+    ],
+    "accepted_visuals": ["Grafico de Barras", "Grafico de Colunas"]
+  },
+  {
+    "id": "LLM-03",
+    "scenario": "Participacao de mercado por categoria",
+    "summary": {
+      "dimensoes": ["Categoria"],
+      "metricas": ["Participacao"],
+      "colunas_data": []
+    },
+    "sample": [
+      {"Categoria": "A", "Participacao": 0.55},
+      {"Categoria": "B", "Participacao": 0.30},
+      {"Categoria": "C", "Participacao": 0.15}
+    ],
+    "accepted_visuals": ["Grafico de Pizza", "Grafico de Rosca", "Treemap"]
+  },
+  {
+    "id": "LLM-04",
+    "scenario": "Correlacao entre investimento e vendas",
+    "summary": {
+      "dimensoes": ["Campanha"],
+      "metricas": ["Investimento", "Vendas"],
+      "colunas_data": []
+    },
+    "sample": [
+      {"Campanha": "A", "Investimento": 1000, "Vendas": 8700},
+      {"Campanha": "B", "Investimento": 1500, "Vendas": 12100}
+    ],
+    "accepted_visuals": ["Dispersao"]
+  },
+  {
+    "id": "LLM-05",
+    "scenario": "Distribuicao de tempo de atendimento",
+    "summary": {
+      "dimensoes": [],
+      "metricas": ["TempoAtendimentoMin"],
+      "colunas_data": []
+    },
+    "sample": [
+      {"TempoAtendimentoMin": 3.2},
+      {"TempoAtendimentoMin": 7.8},
+      {"TempoAtendimentoMin": 12.1}
+    ],
+    "accepted_visuals": ["Histograma", "Box Plot"]
+  },
+  {
+    "id": "LLM-06",
+    "scenario": "Conversao em etapas do funil comercial",
+    "summary": {
+      "dimensoes": ["Etapa"],
+      "metricas": ["Quantidade"],
+      "colunas_data": []
+    },
+    "sample": [
+      {"Etapa": "Leads", "Quantidade": 1000},
+      {"Etapa": "Propostas", "Quantidade": 350},
+      {"Etapa": "Fechamentos", "Quantidade": 90}
+    ],
+    "accepted_visuals": ["Funnel"]
+  },
+  {
+    "id": "LLM-07",
+    "scenario": "Ponte entre receita e lucro",
+    "summary": {
+      "dimensoes": ["Componente"],
+      "metricas": ["Impacto"],
+      "colunas_data": []
+    },
+    "sample": [
+      {"Componente": "Receita", "Impacto": 500000},
+      {"Componente": "Custos", "Impacto": -210000},
+      {"Componente": "Impostos", "Impacto": -80000}
+    ],
+    "accepted_visuals": ["Waterfall"]
+  },
+  {
+    "id": "LLM-08",
+    "scenario": "Faturamento agregado por estado",
+    "summary": {
+      "dimensoes": ["UF"],
+      "metricas": ["Faturamento"],
+      "colunas_data": []
+    },
+    "sample": [
+      {"UF": "CE", "Faturamento": 200000},
+      {"UF": "PE", "Faturamento": 160000}
+    ],
+    "accepted_visuals": ["Mapa Preenchido", "Shape Map", "Azure Maps", "Mapa Basico"]
+  },
+  {
+    "id": "LLM-09",
+    "scenario": "Valor atual contra meta",
+    "summary": {
+      "dimensoes": [],
+      "metricas": ["ValorAtual", "Meta"],
+      "colunas_data": []
+    },
+    "sample": [{"ValorAtual": 85000, "Meta": 100000}],
+    "accepted_visuals": ["Bullet Chart", "Gauge", "Progress Bar", "Cartao KPI"]
+  },
+  {
+    "id": "LLM-10",
+    "scenario": "Cruzamento de produto e regiao",
+    "summary": {
+      "dimensoes": ["Produto", "Regiao"],
+      "metricas": ["Quantidade"],
+      "colunas_data": []
+    },
+    "sample": [
+      {"Produto": "A", "Regiao": "Norte", "Quantidade": 20},
+      {"Produto": "B", "Regiao": "Sul", "Quantidade": 34}
+    ],
+    "accepted_visuals": ["Matriz", "Heatmap"]
+  },
+  {
+    "id": "LLM-11",
+    "scenario": "Cronograma de tarefas de projeto",
+    "summary": {
+      "dimensoes": ["Tarefa", "Inicio", "Fim"],
+      "metricas": ["PercentualConcluido"],
+      "colunas_data": ["Inicio", "Fim"]
+    },
+    "sample": [
+      {"Tarefa": "Planejamento", "Inicio": "2026-01-01", "Fim": "2026-01-10", "PercentualConcluido": 1.0},
+      {"Tarefa": "Desenvolvimento", "Inicio": "2026-01-11", "Fim": "2026-02-20", "PercentualConcluido": 0.6}
+    ],
+    "accepted_visuals": ["Timeline/Gantt"]
+  },
+  {
+    "id": "LLM-12",
+    "scenario": "Fluxo de clientes entre canais",
+    "summary": {
+      "dimensoes": ["Origem", "Destino"],
+      "metricas": ["Clientes"],
+      "colunas_data": []
+    },
+    "sample": [
+      {"Origem": "Site", "Destino": "Compra", "Clientes": 80},
+      {"Origem": "Rede Social", "Destino": "Site", "Clientes": 140}
+    ],
+    "accepted_visuals": ["Sankey"]
+  },
+  {
+    "id": "LLM-13",
+    "scenario": "Duas metricas mensais com escalas relacionadas",
+    "summary": {
+      "dimensoes": ["Mes"],
+      "metricas": ["Faturamento", "Meta"],
+      "colunas_data": ["Mes"]
+    },
+    "sample": [
+      {"Mes": "2026-01", "Faturamento": 90000, "Meta": 100000},
+      {"Mes": "2026-02", "Faturamento": 112000, "Meta": 105000}
+    ],
+    "accepted_visuals": ["Combo Linha + Coluna", "Grafico de Linha"]
+  },
+  {
+    "id": "LLM-14",
+    "scenario": "Indicadores executivos isolados",
+    "summary": {
+      "dimensoes": [],
+      "metricas": ["FaturamentoTotal", "Lucro", "ClientesAtivos"],
+      "colunas_data": []
+    },
+    "sample": [{"FaturamentoTotal": 980000, "Lucro": 210000, "ClientesAtivos": 343}],
+    "accepted_visuals": ["Cartao KPI"]
+  }
+]

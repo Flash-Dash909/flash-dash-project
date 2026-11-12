@@ -1,11 +1,17 @@
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+
+import '../../../core/api_config.dart';
+import '../../dashboard/dashboard_manager.dart';
 
 class StarSchemaScreen extends StatefulWidget {
   final Map<String, dynamic> summary;
+  final String? fonteId;
 
-  const StarSchemaScreen({super.key, required this.summary});
+  const StarSchemaScreen({super.key, required this.summary, this.fonteId});
 
   @override
   State<StarSchemaScreen> createState() => _StarSchemaScreenState();
@@ -15,52 +21,163 @@ class _StarSchemaScreenState extends State<StarSchemaScreen> {
   late final List<String> _dimensoes;
   late final List<String> _metricas;
   late final List<_StarRelation> _relacoes;
+  late final List<_StarRelation> _relacoesAutomaticas;
+  late final Map<String, dynamic> _modeloBase;
+  bool _salvando = false;
 
   @override
   void initState() {
     super.initState();
-    _dimensoes = List<String>.from(widget.summary['dimensoes'] ?? []);
-    _metricas = List<String>.from(widget.summary['metricas'] ?? []);
-    _relacoes = _dimensoes
-        .map(
-          (dimensao) => _StarRelation(
-            dimensao: dimensao,
-            cardinalidade: '1:N',
-            chaveDimensao: 'ID_$dimensao',
-            chaveFato: 'FK_$dimensao',
-            ativa: true,
-            origem: 'IA',
-          ),
-        )
+    final modelRaw = widget.summary['modelo_estrela'];
+    final model = modelRaw is Map
+        ? Map<String, dynamic>.from(modelRaw)
+        : <String, dynamic>{};
+    _modeloBase = model;
+    final factRaw = model['tabela_fato'];
+    final fact = factRaw is Map
+        ? Map<String, dynamic>.from(factRaw)
+        : <String, dynamic>{};
+    final dimensionTables = (model['tabelas_dimensao'] as List? ?? const [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
         .toList();
+
+    _dimensoes = dimensionTables.isNotEmpty
+        ? dimensionTables
+              .map((item) => item['nome']?.toString() ?? 'DIMENSAO')
+              .toList()
+        : List<String>.from(widget.summary['dimensoes'] ?? []);
+    _metricas = fact['medidas'] is List
+        ? List<String>.from(fact['medidas'])
+        : List<String>.from(widget.summary['metricas'] ?? []);
+
+    final relationshipItems = (model['relacionamentos'] as List? ?? const [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+    _relacoes = relationshipItems.isNotEmpty
+        ? relationshipItems.map(_relationFromModel).toList()
+        : _defaultRelations();
+    final automaticModelRaw = widget.summary['modelo_estrela_automatico'];
+    final automaticModel = automaticModelRaw is Map
+        ? Map<String, dynamic>.from(automaticModelRaw)
+        : const <String, dynamic>{};
+    final automaticItems =
+        (automaticModel['relacionamentos'] as List? ?? const [])
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
+    _relacoesAutomaticas = automaticItems.isNotEmpty
+        ? automaticItems.map(_relationFromModel).toList()
+        : _relacoes.map((item) => item.copy()).toList();
+  }
+
+  List<_StarRelation> _defaultRelations() => _dimensoes
+      .map(
+        (dimension) => _StarRelation(
+          dimensao: dimension,
+          cardinalidade: '1:N',
+          chaveDimensao: 'ID_$dimension',
+          chaveFato: 'FK_$dimension',
+          ativa: true,
+          origem: 'Automatica',
+          tabelaOrigem: dimension,
+          tabelaDestino: 'FATO_ANALISE',
+          dimensaoNaOrigem: true,
+          metadados: const {},
+        ),
+      )
+      .toList();
+
+  _StarRelation _relationFromModel(Map<String, dynamic> item) {
+    final origin = item['origem']?.toString() ?? 'DIMENSAO';
+    final destination = item['destino']?.toString() ?? 'FATO_ANALISE';
+    final cardinality = item['cardinalidade']?.toString() ?? '1:N';
+    final dimensionAtOrigin =
+        origin.startsWith('DIM_') ||
+        destination.startsWith('FATO_') ||
+        !destination.startsWith('DIM_');
+    final dimension = dimensionAtOrigin ? origin : destination;
+    final originKey = item['chave_origem']?.toString() ?? '';
+    final destinationKey = item['chave_destino']?.toString() ?? '';
+    final confidenceRaw = item['confianca'];
+    final confidence = confidenceRaw is num
+        ? confidenceRaw.toDouble()
+        : double.tryParse(confidenceRaw?.toString() ?? '');
+    return _StarRelation(
+      dimensao: dimension,
+      cardinalidade: cardinality,
+      chaveDimensao: dimensionAtOrigin ? originKey : destinationKey,
+      chaveFato: dimensionAtOrigin ? destinationKey : originKey,
+      ativa: item['ativa'] as bool? ?? true,
+      origem: item['origem_inferencia'] == 'heuristica'
+          ? 'Automatica'
+          : (item['origem_inferencia']?.toString() ?? 'Automatica'),
+      tabelaOrigem: origin,
+      tabelaDestino: destination,
+      dimensaoNaOrigem: dimensionAtOrigin,
+      metadados: item,
+      observacao: confidence == null
+          ? ''
+          : 'Confianca: ${(confidence * 100).toStringAsFixed(0)}%',
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final isDesktop = MediaQuery.of(context).size.width >= 980;
+    final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('Modelo Estrela'),
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF0F172A),
         elevation: 1,
         shadowColor: Colors.black12,
         actions: [
-          TextButton.icon(
-            onPressed: _restaurarModeloAutomatico,
-            icon: const Icon(Icons.auto_fix_high_outlined),
-            label: Text(isDesktop ? 'Restaurar IA' : 'IA'),
-          ),
+          if (widget.fonteId != null)
+            if (isDesktop)
+              TextButton.icon(
+                onPressed: _salvando ? null : _salvarModelo,
+                icon: _salvando
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save_outlined),
+                label: const Text('Salvar modelo'),
+              )
+            else
+              IconButton(
+                onPressed: _salvando ? null : _salvarModelo,
+                icon: _salvando
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save_outlined),
+                tooltip: 'Salvar modelo',
+              ),
+          if (isDesktop)
+            TextButton.icon(
+              onPressed: _restaurarModeloAutomatico,
+              icon: const Icon(Icons.auto_fix_high_outlined),
+              label: const Text('Restaurar automatico'),
+            )
+          else
+            IconButton(
+              onPressed: _restaurarModeloAutomatico,
+              icon: const Icon(Icons.auto_fix_high_outlined),
+              tooltip: 'Restaurar modelo automatico',
+            ),
           const SizedBox(width: 8),
         ],
       ),
       body: _dimensoes.isEmpty && _metricas.isEmpty
-          ? const Center(
+          ? Center(
               child: Text(
                 'Sem dados suficientes para modelagem.',
-                style: TextStyle(color: Color(0xFF64748B)),
+                style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
               ),
             )
           : Padding(
@@ -76,7 +193,12 @@ class _StarSchemaScreenState extends State<StarSchemaScreen> {
                     )
                   : ListView(
                       children: [
-                        SizedBox(height: 560, child: _buildDiagramPanel()),
+                        SizedBox(
+                          height: (440 + _relacoes.length * 34)
+                              .clamp(500, 720)
+                              .toDouble(),
+                          child: _buildDiagramPanel(),
+                        ),
                         const SizedBox(height: 16),
                         _buildEditorPanel(),
                       ],
@@ -86,6 +208,7 @@ class _StarSchemaScreenState extends State<StarSchemaScreen> {
   }
 
   Widget _buildDiagramPanel() {
+    final scheme = Theme.of(context).colorScheme;
     return _Panel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -95,28 +218,31 @@ class _StarSchemaScreenState extends State<StarSchemaScreen> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEFF6FF),
+                  color: scheme.primaryContainer,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(Icons.hub_outlined, color: Color(0xFF2563EB)),
               ),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'Relacionamentos detectados',
                       style: TextStyle(
-                        color: Color(0xFF0F172A),
+                        color: scheme.onSurface,
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                     SizedBox(height: 2),
                     Text(
-                      'A modelagem inicial foi sugerida automaticamente pela IA.',
-                      style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                      'A modelagem inicial foi inferida automaticamente pelas chaves e pelos valores.',
+                      style: TextStyle(
+                        color: scheme.onSurfaceVariant,
+                        fontSize: 13,
+                      ),
                     ),
                   ],
                 ),
@@ -131,7 +257,10 @@ class _StarSchemaScreenState extends State<StarSchemaScreen> {
                   children: [
                     CustomPaint(
                       size: Size(constraints.maxWidth, constraints.maxHeight),
-                      painter: _StarSchemaPainter(relacoes: _relacoes),
+                      painter: _StarSchemaPainter(
+                        relacoes: _relacoes,
+                        labelBackground: scheme.surface,
+                      ),
                     ),
                     Align(
                       alignment: Alignment.center,
@@ -180,6 +309,7 @@ class _StarSchemaScreenState extends State<StarSchemaScreen> {
   }
 
   Widget _buildEditorPanel() {
+    final scheme = Theme.of(context).colorScheme;
     return _Panel(
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -204,18 +334,18 @@ class _StarSchemaScreenState extends State<StarSchemaScreen> {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'Editor de relacoes',
                 style: TextStyle(
-                  color: Color(0xFF0F172A),
+                  color: scheme.onSurface,
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
                 ),
               ),
               const SizedBox(height: 6),
-              const Text(
-                'Use esta area quando precisar corrigir manualmente uma relacao inferida pela IA.',
-                style: TextStyle(color: Color(0xFF64748B), height: 1.35),
+              Text(
+                'Use esta area quando precisar corrigir manualmente uma relacao inferida automaticamente.',
+                style: TextStyle(color: scheme.onSurfaceVariant, height: 1.35),
               ),
               const SizedBox(height: 16),
               _ResumoModelo(relacoes: _relacoes),
@@ -244,19 +374,47 @@ class _StarSchemaScreenState extends State<StarSchemaScreen> {
     setState(() {
       _relacoes
         ..clear()
-        ..addAll(
-          _dimensoes.map(
-            (dimensao) => _StarRelation(
-              dimensao: dimensao,
-              cardinalidade: '1:N',
-              chaveDimensao: 'ID_$dimensao',
-              chaveFato: 'FK_$dimensao',
-              ativa: true,
-              origem: 'IA',
-            ),
-          ),
-        );
+        ..addAll(_relacoesAutomaticas.map((item) => item.copy()));
     });
+  }
+
+  Future<void> _salvarModelo() async {
+    final fonteId = widget.fonteId;
+    if (fonteId == null || fonteId.isEmpty) return;
+
+    setState(() => _salvando = true);
+    try {
+      final modelo = Map<String, dynamic>.from(_modeloBase);
+      modelo['relacionamentos'] = _relacoes
+          .map((relacao) => relacao.toModel())
+          .toList();
+      final response = await http.put(
+        Uri.parse('${ApiConfig.baseUrl}/fontes-dados/$fonteId/modelo'),
+        headers: {
+          'Content-Type': 'application/json',
+          ...DashboardManager.authHeaders,
+        },
+        body: json.encode({'modelo_estrela': modelo}),
+      );
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final body = json.decode(utf8.decode(response.bodyBytes));
+        throw Exception(
+          body['detail']?.toString() ?? 'Nao foi possivel salvar o modelo.',
+        );
+      }
+      widget.summary['modelo_estrela'] = modelo;
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Modelo estrela salvo com sucesso.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao salvar o modelo: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _salvando = false);
+    }
   }
 
   Future<void> _adicionarRelacao() async {
@@ -267,6 +425,10 @@ class _StarSchemaScreenState extends State<StarSchemaScreen> {
       chaveFato: _dimensoes.isNotEmpty ? 'FK_${_dimensoes.first}' : 'FK',
       ativa: true,
       origem: 'Manual',
+      tabelaOrigem: _dimensoes.isNotEmpty ? _dimensoes.first : 'Nova_Dimensao',
+      tabelaDestino: 'FATO_ANALISE',
+      dimensaoNaOrigem: true,
+      metadados: const {},
     );
 
     final salva = await _showRelacaoDialog(nova);
@@ -288,7 +450,8 @@ class _StarSchemaScreenState extends State<StarSchemaScreen> {
         ..chaveFato = salva.chaveFato
         ..observacao = salva.observacao
         ..ativa = salva.ativa
-        ..origem = salva.origem == 'IA' ? 'Ajustada' : salva.origem;
+        ..origem = salva.origem == 'Automatica' ? 'Ajustada' : salva.origem
+        ..atualizarTabelaDimensao();
     });
   }
 
@@ -331,7 +494,7 @@ class _StarSchemaScreenState extends State<StarSchemaScreen> {
                           labelText: 'Cardinalidade',
                           prefixIcon: Icon(Icons.call_split_outlined),
                         ),
-                        items: const ['1:N', 'N:1', '1:1', 'N:N']
+                        items: const ['1:N', '1:1', 'N:N']
                             .map(
                               (value) => DropdownMenuItem(
                                 value: value,
@@ -401,9 +564,10 @@ class _StarSchemaScreenState extends State<StarSchemaScreen> {
                         ..chaveFato = chaveFatoController.text.trim()
                         ..observacao = observacaoController.text.trim()
                         ..ativa = ativa
-                        ..origem = relacao.origem == 'IA'
+                        ..origem = relacao.origem == 'Automatica'
                             ? 'Ajustada'
-                            : relacao.origem,
+                            : relacao.origem
+                        ..atualizarTabelaDimensao(),
                     );
                   },
                   child: const Text('Salvar'),
@@ -430,6 +594,10 @@ class _StarRelation {
   String observacao;
   bool ativa;
   String origem;
+  String tabelaOrigem;
+  String tabelaDestino;
+  bool dimensaoNaOrigem;
+  Map<String, dynamic> metadados;
 
   _StarRelation({
     required this.dimensao,
@@ -439,7 +607,33 @@ class _StarRelation {
     this.observacao = '',
     required this.ativa,
     required this.origem,
+    required this.tabelaOrigem,
+    required this.tabelaDestino,
+    required this.dimensaoNaOrigem,
+    required this.metadados,
   });
+
+  void atualizarTabelaDimensao() {
+    if (dimensaoNaOrigem) {
+      tabelaOrigem = dimensao;
+    } else {
+      tabelaDestino = dimensao;
+    }
+  }
+
+  Map<String, dynamic> toModel() {
+    return {
+      ...metadados,
+      'origem': tabelaOrigem,
+      'destino': tabelaDestino,
+      'chave_origem': dimensaoNaOrigem ? chaveDimensao : chaveFato,
+      'chave_destino': dimensaoNaOrigem ? chaveFato : chaveDimensao,
+      'cardinalidade': cardinalidade,
+      'ativa': ativa,
+      'origem_inferencia': origem == 'Automatica' ? 'heuristica' : 'manual',
+      if (observacao.isNotEmpty) 'observacao': observacao,
+    };
+  }
 
   _StarRelation copy() {
     return _StarRelation(
@@ -450,6 +644,10 @@ class _StarRelation {
       observacao: observacao,
       ativa: ativa,
       origem: origem,
+      tabelaOrigem: tabelaOrigem,
+      tabelaDestino: tabelaDestino,
+      dimensaoNaOrigem: dimensaoNaOrigem,
+      metadados: Map<String, dynamic>.from(metadados),
     );
   }
 }
@@ -461,16 +659,18 @@ class _Panel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: scheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: scheme.outlineVariant),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.04),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),
@@ -490,7 +690,7 @@ class _ResumoModelo extends StatelessWidget {
   Widget build(BuildContext context) {
     final ativas = relacoes.where((relacao) => relacao.ativa).length;
     final ajustadas = relacoes
-        .where((relacao) => relacao.origem != 'IA')
+        .where((relacao) => relacao.origem != 'Automatica')
         .length;
 
     return Wrap(
@@ -513,22 +713,24 @@ class _MiniMetric extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: 108,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: scheme.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(color: Color(0xFF64748B))),
+          Text(label, style: TextStyle(color: scheme.onSurfaceVariant)),
           Text(
             value,
-            style: const TextStyle(
-              color: Color(0xFF0F172A),
+            style: TextStyle(
+              color: scheme.onSurface,
               fontSize: 20,
               fontWeight: FontWeight.w800,
             ),
@@ -555,6 +757,8 @@ class _RelationCard extends StatelessWidget {
     final color = relacao.ativa
         ? const Color(0xFF2563EB)
         : const Color(0xFF94A3B8);
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return InkWell(
       onTap: onEdit,
@@ -563,10 +767,10 @@ class _RelationCard extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: relacao.ativa
-              ? const Color(0xFFF8FAFC)
-              : const Color(0xFFF1F5F9),
+              ? (isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC))
+              : scheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
+          border: Border.all(color: scheme.outlineVariant),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -578,8 +782,8 @@ class _RelationCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     relacao.dimensao,
-                    style: const TextStyle(
-                      color: Color(0xFF0F172A),
+                    style: TextStyle(
+                      color: scheme.onSurface,
                       fontWeight: FontWeight.w800,
                     ),
                     overflow: TextOverflow.ellipsis,
@@ -600,14 +804,14 @@ class _RelationCard extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               '${relacao.chaveDimensao} -> ${relacao.chaveFato}',
-              style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+              style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
               overflow: TextOverflow.ellipsis,
             ),
             if (relacao.observacao.isNotEmpty) ...[
               const SizedBox(height: 8),
               Text(
                 relacao.observacao,
-                style: const TextStyle(color: Color(0xFF475569), fontSize: 12),
+                style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -652,10 +856,11 @@ class _TabelaFato extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       width: 190,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: scheme.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: const Color(0xFF2563EB), width: 2),
         boxShadow: [
@@ -731,13 +936,19 @@ class _TabelaDimensao extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final tableName =
+        relacao.dimensao.startsWith('DIM_') ||
+            relacao.dimensao.startsWith('PONTE_')
+        ? relacao.dimensao
+        : 'DIM_${relacao.dimensao}';
     return InkWell(
       onTap: onEdit,
       borderRadius: BorderRadius.circular(14),
       child: Container(
         width: 164,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: scheme.surface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: const Color(0xFF14B8A6), width: 2),
           boxShadow: [
@@ -759,7 +970,7 @@ class _TabelaDimensao extends StatelessWidget {
                 borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
               ),
               child: Text(
-                'DIM_${relacao.dimensao}',
+                tableName,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: Colors.white,
@@ -815,7 +1026,10 @@ class _FieldLine extends StatelessWidget {
         Expanded(
           child: Text(
             text,
-            style: const TextStyle(fontSize: 11, color: Color(0xFF334155)),
+            style: TextStyle(
+              fontSize: 11,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
             overflow: TextOverflow.ellipsis,
           ),
         ),
@@ -826,8 +1040,9 @@ class _FieldLine extends StatelessWidget {
 
 class _StarSchemaPainter extends CustomPainter {
   final List<_StarRelation> relacoes;
+  final Color labelBackground;
 
-  _StarSchemaPainter({required this.relacoes});
+  _StarSchemaPainter({required this.relacoes, required this.labelBackground});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -896,7 +1111,7 @@ class _StarSchemaPainter extends CustomPainter {
       painter.width + 12,
       painter.height + 6,
     );
-    final bg = Paint()..color = Colors.white;
+    final bg = Paint()..color = labelBackground;
     canvas.drawRRect(
       RRect.fromRectAndRadius(rect, const Radius.circular(999)),
       bg,
@@ -909,5 +1124,6 @@ class _StarSchemaPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _StarSchemaPainter oldDelegate) =>
-      oldDelegate.relacoes != relacoes;
+      oldDelegate.relacoes != relacoes ||
+      oldDelegate.labelBackground != labelBackground;
 }

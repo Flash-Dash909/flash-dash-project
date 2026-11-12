@@ -4,7 +4,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import '../../../core/api_config.dart';
 import '../../../core/widgets/app_logo.dart';
+import '../../dashboard/dashboard_manager.dart';
 import '../../resultado/screens/selecao_grafico_screen.dart';
 
 class UploadScreen extends StatefulWidget {
@@ -151,9 +153,12 @@ class _UploadScreenState extends State<UploadScreen> {
         throw Exception("Nao foi possivel ler o arquivo selecionado.");
       }
 
-      final uri = Uri.parse('https://flash-dash-project-7.onrender.com/analisar-planilha');
+      final uri = Uri.parse('${ApiConfig.baseUrl}/analisar-planilha');
       final request = http.MultipartRequest('POST', uri);
+      request.headers.addAll(DashboardManager.authHeaders);
       request.fields['fonte_tipo'] = fonte["tipo"];
+      final usuarioId = DashboardManager.usuarioAtualId;
+      if (usuarioId != null) request.fields['usuario_id'] = usuarioId;
       request.files.add(
         http.MultipartFile.fromBytes('file', fileBytes, filename: fileName),
       );
@@ -207,12 +212,15 @@ class _UploadScreenState extends State<UploadScreen> {
     try {
       setState(() => _isLoading = true);
       final response = await http.post(
-        Uri.parse('https://flash-dash-project-7.onrender.com/analisar-url'),
-        headers: {'Content-Type': 'application/json'},
+        Uri.parse('${ApiConfig.baseUrl}/analisar-url'),
+        headers: {
+          'Content-Type': 'application/json',
+          ...DashboardManager.authHeaders,
+        },
         body: json.encode({
           'url': url,
           'fonte_tipo': fonte["tipo"],
-          'nome': '${fonte["tipo"]}.json',
+          'usuario_id': DashboardManager.usuarioAtualId,
         }),
       );
 
@@ -230,6 +238,19 @@ class _UploadScreenState extends State<UploadScreen> {
   Future<void> _tratarResposta(http.Response response) async {
     final data = json.decode(utf8.decode(response.bodyBytes));
     if (response.statusCode == 200 && data['status'] != 'error') {
+      final fonte = data['fonte'];
+      if (fonte is Map<String, dynamic>) {
+        DashboardManager.fontesSalvas.removeWhere(
+          (item) => item['id'] == fonte['id']?.toString(),
+        );
+        DashboardManager.fontesSalvas.insert(0, {
+          'id': fonte['id']?.toString() ?? '',
+          'nome': fonte['nome_arquivo']?.toString() ?? 'Fonte de dados',
+          'data': fonte['created_at']?.toString() ?? '',
+          'tamanho': fonte['tamanho_kb']?.toString() ?? '',
+          'status': fonte['status']?.toString() ?? 'Concluido',
+        });
+      }
       if (!mounted) return;
       Navigator.push(
         context,

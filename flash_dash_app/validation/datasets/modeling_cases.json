@@ -1,0 +1,181 @@
+[
+  {
+    "id": "one_to_many_alias",
+    "sources": [
+      {
+        "id": "clientes",
+        "nome_arquivo": "clientes.csv",
+        "dados_brutos": [
+          {"id": "C1", "cliente": "Alpha"},
+          {"id": "C2", "cliente": "Beta"}
+        ]
+      },
+      {
+        "id": "vendas",
+        "nome_arquivo": "vendas.csv",
+        "dados_brutos": [
+          {"customer_id": "C1", "valor": 10},
+          {"customer_id": "C1", "valor": 20},
+          {"customer_id": "C2", "valor": 30}
+        ]
+      }
+    ],
+    "expected": [
+      ["clientes", "vendas", "id", "customer_id", "1:N"]
+    ]
+  },
+  {
+    "id": "one_to_one",
+    "sources": [
+      {
+        "id": "contas",
+        "nome_arquivo": "contas.csv",
+        "dados_brutos": [{"id": "A1"}, {"id": "A2"}]
+      },
+      {
+        "id": "perfis",
+        "nome_arquivo": "perfis.csv",
+        "dados_brutos": [
+          {"conta_id": "A1", "cidade": "Fortaleza"},
+          {"conta_id": "A2", "cidade": "Recife"}
+        ]
+      }
+    ],
+    "expected": [
+      ["contas", "perfis", "id", "conta_id", "1:1"]
+    ]
+  },
+  {
+    "id": "many_to_many",
+    "sources": [
+      {
+        "id": "canais",
+        "nome_arquivo": "canais.csv",
+        "dados_brutos": [
+          {"campanha_id": "C1", "canal": "Email"},
+          {"campanha_id": "C1", "canal": "Social"},
+          {"campanha_id": "C2", "canal": "Email"}
+        ]
+      },
+      {
+        "id": "publicos",
+        "nome_arquivo": "publicos.csv",
+        "dados_brutos": [
+          {"campanha_id": "C1", "publico": "Ativo"},
+          {"campanha_id": "C1", "publico": "Novo"},
+          {"campanha_id": "C2", "publico": "Ativo"}
+        ]
+      }
+    ],
+    "expected": [
+      ["canais", "publicos", "campanha_id", "campanha_id", "N:N"]
+    ]
+  },
+  {
+    "id": "three_source_star",
+    "sources": [
+      {
+        "id": "clientes",
+        "nome_arquivo": "clientes.csv",
+        "dados_brutos": [{"id": "C1"}, {"id": "C2"}]
+      },
+      {
+        "id": "produtos",
+        "nome_arquivo": "produtos.csv",
+        "dados_brutos": [{"id": "P1"}, {"id": "P2"}]
+      },
+      {
+        "id": "vendas",
+        "nome_arquivo": "vendas.csv",
+        "dados_brutos": [
+          {"cliente_id": "C1", "produto_id": "P1", "valor": 10},
+          {"cliente_id": "C1", "produto_id": "P2", "valor": 20},
+          {"cliente_id": "C2", "produto_id": "P1", "valor": 30}
+        ]
+      }
+    ],
+    "expected": [
+      ["clientes", "vendas", "id", "cliente_id", "1:N"],
+      ["produtos", "vendas", "id", "produto_id", "1:N"]
+    ]
+  },
+  {
+    "id": "numeric_text_keys",
+    "sources": [
+      {
+        "id": "clientes",
+        "nome_arquivo": "clientes.csv",
+        "dados_brutos": [{"id": 1}, {"id": 2}]
+      },
+      {
+        "id": "vendas",
+        "nome_arquivo": "vendas.csv",
+        "dados_brutos": [
+          {"cliente_id": "1", "valor": 10},
+          {"cliente_id": "1", "valor": 20},
+          {"cliente_id": "2", "valor": 30}
+        ]
+      }
+    ],
+    "expected": [
+      ["clientes", "vendas", "id", "cliente_id", "1:N"]
+    ]
+  },
+  {
+    "id": "partial_referential_integrity",
+    "sources": [
+      {
+        "id": "clientes",
+        "nome_arquivo": "clientes.csv",
+        "dados_brutos": [{"id": 1}, {"id": 2}]
+      },
+      {
+        "id": "vendas",
+        "nome_arquivo": "vendas.csv",
+        "dados_brutos": [
+          {"cliente_id": 1, "valor": 10},
+          {"cliente_id": 1, "valor": 20},
+          {"cliente_id": 3, "valor": 30}
+        ]
+      }
+    ],
+    "expected": [
+      ["clientes", "vendas", "id", "cliente_id", "1:N"]
+    ]
+  },
+  {
+    "id": "generic_id_collision",
+    "sources": [
+      {
+        "id": "clientes",
+        "nome_arquivo": "clientes.csv",
+        "dados_brutos": [{"id": 1}, {"id": 2}]
+      },
+      {
+        "id": "produtos",
+        "nome_arquivo": "produtos.csv",
+        "dados_brutos": [{"id": 1}, {"id": 2}]
+      }
+    ],
+    "expected": []
+  },
+  {
+    "id": "disjoint_named_keys",
+    "sources": [
+      {
+        "id": "clientes",
+        "nome_arquivo": "clientes.csv",
+        "dados_brutos": [{"id": "C1"}, {"id": "C2"}]
+      },
+      {
+        "id": "vendas",
+        "nome_arquivo": "vendas.csv",
+        "dados_brutos": [
+          {"cliente_id": "X1", "valor": 10},
+          {"cliente_id": "X2", "valor": 20}
+        ]
+      }
+    ],
+    "expected": []
+  }
+]

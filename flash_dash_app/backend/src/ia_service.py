@@ -1,13 +1,16 @@
 from google import genai 
 
+import asyncio
 import json
 import os
+from pathlib import Path
+
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 api_key = os.getenv("GEMINI_API_KEY")
 
-client = genai.Client(api_key=api_key)
+client = genai.Client(api_key=api_key) if api_key else None
 
 def analisar_dados_com_ia(dados_json):
     print("---Enviando dados para o Gemini pensar...\n")
@@ -34,6 +37,8 @@ def analisar_dados_com_ia(dados_json):
     
     # TRATAMENTO DE ERRO AQUI:
     try:
+        if client is None:
+            return "Dados processados com sucesso. Configure GEMINI_API_KEY para ativar os insights inteligentes."
         resposta = client.models.generate_content(
             model='gemini-2.5-flash',
             contents=prompt
@@ -46,7 +51,7 @@ def analisar_dados_com_ia(dados_json):
         print(f"⚠️ Erro na IA interceptado: {e}")
         return "⚠️ O serviço de insights inteligentes está temporariamente indisponível (alta demanda ou limite atingido). No entanto, seus dados foram processados com sucesso. Você pode continuar a montar seus gráficos abaixo normalmente!"
     
-def conversar_com_ia(mensagem_usuario, contexto_dados):
+async def conversar_com_ia(mensagem_usuario, contexto_dados):
     # Transforma os dados dos gráficos em texto
     dados_texto = json.dumps(contexto_dados, indent=2, ensure_ascii=False, default=str)
     
@@ -68,11 +73,18 @@ def conversar_com_ia(mensagem_usuario, contexto_dados):
     """
     
     try:
-        resposta = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt
+        if client is None:
+            return "Configure GEMINI_API_KEY no backend para ativar o chat inteligente."
+        resposta = await asyncio.wait_for(
+            client.aio.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=prompt,
+            ),
+            timeout=40,
         )
-        return resposta.text
+        return resposta.text or "Nao foi possivel gerar uma resposta para esta pergunta."
+    except asyncio.TimeoutError:
+        return "A IA demorou mais que o esperado. Tente novamente em alguns segundos."
     except Exception as e:
         print(f"⚠️ Erro no Chat IA: {e}")
-        return "⚠️ Tive um problema de conexão. Pode refazer a pergunta?" 
+        return "⚠️ Tive um problema de conexão. Pode refazer a pergunta?"

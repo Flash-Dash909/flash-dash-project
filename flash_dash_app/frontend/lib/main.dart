@@ -87,6 +87,9 @@ class FlashDashApp extends StatelessWidget {
           horizontal: 16,
           vertical: 16,
         ),
+        labelStyle: const TextStyle(color: Color(0xFF475569)),
+        hintStyle: const TextStyle(color: Color(0xFF64748B)),
+        prefixIconColor: const Color(0xFF475569),
       ),
     );
   }
@@ -157,7 +160,15 @@ class FlashDashApp extends StatelessWidget {
           horizontal: 16,
           vertical: 16,
         ),
+        labelStyle: const TextStyle(color: Color(0xFFCBD5E1)),
+        hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
+        prefixIconColor: const Color(0xFF94A3B8),
       ),
+      dialogTheme: const DialogThemeData(backgroundColor: surface),
+      bottomSheetTheme: const BottomSheetThemeData(backgroundColor: surface),
+      drawerTheme: const DrawerThemeData(backgroundColor: surface),
+      dividerTheme: const DividerThemeData(color: border),
+      popupMenuTheme: const PopupMenuThemeData(color: surface),
     );
   }
 }

@@ -1,79 +1,108 @@
-# ⚡📊 Flash-Dash
+# Flash-Dash
 
-O **Flash-Dash** é um projeto universitário focado na democratização do Business Intelligence (BI). O sistema automatiza processos de dados para oferecer dashboards ágeis e de baixo custo, ideal para **Pequenas e Médias Empresas (PMEs)** e **Analistas de Dados**. 
+O Flash-Dash e uma plataforma de Business Intelligence voltada a transformar
+fontes de dados brutas em tabelas tratadas, modelos estrela e dashboards
+interativos. O projeto combina um frontend Flutter, uma API FastAPI, tratamento
+de dados com Pandas, persistencia no Supabase e analises com Google Gemini.
 
-Com a recente integração de Inteligência Artificial Generativa, a plataforma não apenas exibe gráficos, mas atua como um consultor interativo de dados.
+## Recursos principais
 
----
+- Importacao de CSV, TSV, TXT, XLSX, XLS, JSON, NDJSON e Parquet.
+- Importacao por URL publica para planilhas e APIs compativeis.
+- Limpeza automatica, normalizacao de tipos, remocao de duplicatas,
+  anonimizacao e registro detalhado de ETL.
+- Combinacao de duas ou mais fontes com inferencia de chaves, cardinalidades e
+  geracao automatica de modelo estrela.
+- Catalogo com 42 tipos de visuais, medidas calculadas e personalizacao por
+  visual.
+- Canvas responsivo com movimentacao, redimensionamento, snap-to-grid e modo de
+  apresentacao.
+- Exportacao de fontes tratadas em CSV, XLSX, JSON, Parquet e PDF.
+- Exportacao de dashboards em XLSX e JSON, alem de captura visual em PNG e PDF
+  pelo frontend.
+- Autenticacao, perfis, fontes, dashboards e logs isolados por usuario.
+- Recomendacao de visuais e chat analitico usando Gemini.
 
-## ✨ Funcionalidades Principais (Novidades)
+## Tecnologias
 
-* **🧹 Processamento Inteligente:** Motor de limpeza automatizado (Pandas) que trata dados brutos de planilhas (Excel/CSV) em segundos.
-* **🎨 Dashboard Canvas (Drag & Drop):** Área de trabalho livre no Flutter onde o usuário pode adicionar, mover, redimensionar e personalizar múltiplos gráficos (Barras, Colunas, Pizza e Rosca).
-* **🤖 Analista IA Interativo:** Chat integrado ao dashboard alimentado pelo **Google Gemini**. A IA lê o contexto dos gráficos visíveis na tela e responde a perguntas analíticas de negócios em tempo real.
+- Frontend: Flutter e Dart, Material 3, FL Chart e CustomPainter.
+- Backend: Python, FastAPI, Pandas, NumPy e Uvicorn.
+- Banco e autenticacao: Supabase/PostgreSQL.
+- Inteligencia artificial: Google Gemini.
+- Qualidade: pytest, flutter_test e flutter analyze.
 
----
+## Estrutura
 
-## 🛠️ Stack Tecnológica
+- `flash_dash_app/backend/`: API, tratamento, modelagem e testes Python.
+- `flash_dash_app/frontend/`: aplicativo Flutter e testes de interface.
+- `flash_dash_app/backend/sql/`: migracoes para o Supabase.
+- `flash_dash_app/validation/`: cenarios e artefatos de validacao academica.
 
-* **Front-End:** [Flutter](https://flutter.dev/) com FL Chart (UI/UX Responsivo e Dashboards Interativos)
-* **Back-End:** [Python](https://www.python.org/) com [FastAPI](https://fastapi.tiangolo.com/) e Pandas (Motor de BI)
-* **Inteligência Artificial:** Google Generative AI (Gemini SDK)
-* **Banco de Dados:** [Supabase](https://supabase.com/) (Backend-as-a-Service)
+## Executar o backend
 
----
+Requisitos: Python 3.12 ou superior.
 
-## 📂 Estrutura do Repositório (Monorepo)
+```powershell
+cd flash_dash_app/backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+Copy-Item .env.example .env
+cd src
+uvicorn main:app --reload
+```
 
-* `core/backend/`: Motor de processamento em Python, IA e API REST.
-* `core/frontend/`: Interface mobile/web/desktop em Flutter.
-* `docs/`: Requisitos, cronogramas e documentação acadêmica.
+O comando acima e destinado ao desenvolvimento. Para carga, demonstracao ou
+producao local, inicie sem recarga automatica e com processos de trabalho:
 
----
+```powershell
+cd flash_dash_app/backend
+python run_production.py
+```
 
-## 🚀 Como Executar o Projeto
+Preencha o `.env` com as credenciais do Supabase, a chave do Gemini e as
+origens CORS permitidas. Nunca envie esse arquivo ao Git.
 
-### Pré-requisitos
-* Python 3.12+
-* Flutter SDK
-* Git
+- API: `http://127.0.0.1:8000`
+- Swagger: `http://127.0.0.1:8000/docs`
+- Saude: `http://127.0.0.1:8000/health`
 
-### 🐍 Configurando o Back-End (Motor de BI e IA)
-1. Acesse a pasta: `cd core/backend`
-2. Crie o ambiente virtual: `python -m venv .venv`
-3. Ative o ambiente: 
-   * Windows: `.\.venv\Scripts\activate`
-   * Mac/Linux: `source .venv/bin/activate`
-4. Instale as dependências: `pip install -r requirements.txt` *(certifique-se de ter fastapi, uvicorn, pandas, google-genai, python-dotenv)*
-5. Configure as variáveis de ambiente: Crie um arquivo `.env` na raiz do backend e adicione sua chave de IA: `GEMINI_API_KEY=sua_chave_aqui`
-6. Inicie o servidor: `uvicorn src.main:app --reload`
-   * Acompanhe a documentação automática em: `https://flash-dash-project-7.onrender.com/docs`
+## Executar o frontend
 
-### 💙 Configurando o Front-End (Flutter)
-1. Acesse a pasta: `cd core/frontend`
-2. Obtenha os pacotes: `flutter pub get`
-3. Execute o app (Web ou Desktop recomendado para testes de UI): `flutter run -d chrome`
+Requisito: Flutter compativel com Dart 3.11 ou superior.
 
----
+```powershell
+cd flash_dash_app/frontend
+flutter pub get
+flutter run -d chrome
+```
 
-## 🔌 Documentação da API (Endpoints Principais)
+O frontend usa `http://127.0.0.1:8000` por padrao em ambiente local. Para
+outro endereco, use `--dart-define=API_BASE_URL=https://seu-backend`.
 
-O motor utiliza o padrão **OpenAPI (Swagger)**.
-* `GET /`: Status geral do sistema.
-* `GET /api/v1/health`: Verificação de saúde para QA.
-* `POST /analisar-planilha`: Recebe o arquivo (CSV/Excel), executa a limpeza dos dados com Pandas e retorna as colunas mapeadas e agregações.
-* `POST /chat-ia`: Recebe a pergunta do usuário e o contexto atual do dashboard (JSON), retornando a análise do Gemini AI.
+## Banco de dados
 
----
+Execute as migracoes de `flash_dash_app/backend/sql/` no SQL Editor do
+Supabase, em ordem numerica. A migracao `003_dashboard_fontes_e_perfil.sql`
+adiciona fontes vinculadas ao dashboard e os campos estendidos de perfil.
 
-## 👥 Equipe e Stakeholders
+## Validacao
 
-| Nome | Função | Responsabilidades |
-| :--- | :--- | :--- |
-| **Rogério Bruno** | Gerente de Projeto / Líder Técnico | Arquitetura, Motor de BI, Integração de IA e Gerenciamento. |
-| **Amanda Evellin** | Desenvolvedora Fullstack | UI/UX e Componentes Visuais do Dashboard. |
-| **Pedro Enrique** | Desenvolvedor Fullstack | Qualidade, Tratamento de Dados e Testes Automatizados. |
-| **Ronnison Reges** | Professor Orientador | Acompanhamento Metodológico e Avaliação do TCC. |
+```powershell
+cd flash_dash_app/backend
+python -m pytest -q
+```
 
----
-*Status: 🟡 Fase de Desenvolvimento: Processamento Pandas, UI do Dashboard e Analista IA Integrados.*
+```powershell
+cd flash_dash_app/frontend
+flutter analyze
+flutter test
+```
+
+Os testes cobrem limpeza, formatos de entrada, modelagem, isolamento por
+usuario, exportacoes, medidas calculadas, renderizacao dos visuais e a matriz
+responsiva de celulares, tablets e desktops.
+
+As avaliacoes reproduziveis de H2 e H5 ficam em `flash_dash_app/validation/`.
+Consulte o README dessa pasta para executar o conjunto rotulado de modelagem e
+o estresse com k6.

@@ -28,8 +28,14 @@ class _DashboardBuilderScreenState extends State<DashboardBuilderScreen> {
       appBar: AppBar(
         title: const Text('Flash-Dash: Construtor'),
         actions: [
-          IconButton(icon: const Icon(Icons.add_chart), onPressed: _adicionarNovoGrafico),
-          IconButton(icon: const Icon(Icons.save), onPressed: () => _salvarNoSupabase()),
+          IconButton(
+            icon: const Icon(Icons.add_chart),
+            onPressed: _adicionarNovoGrafico,
+          ),
+          IconButton(
+            icon: const Icon(Icons.save),
+            onPressed: () => _salvarNoSupabase(),
+          ),
         ],
       ),
       body: Container(
@@ -53,20 +59,29 @@ class _DashboardBuilderScreenState extends State<DashboardBuilderScreen> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(8),
-                    boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
-                    border: Border.all(color: Colors.blueAccent.withOpacity(0.5)),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black12, blurRadius: 4),
+                    ],
+                    border: Border.all(
+                      color: Colors.blueAccent.withValues(alpha: 0.5),
+                    ),
                   ),
                   child: Column(
                     children: [
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(config['titulo'], style: const TextStyle(fontWeight: FontWeight.bold)),
+                          Text(
+                            config['titulo'],
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
                           const Icon(Icons.drag_indicator, size: 16),
                         ],
                       ),
                       const Divider(),
-                      const Expanded(child: Center(child: Text("Aqui entra o Gráfico"))),
+                      const Expanded(
+                        child: Center(child: Text("Aqui entra o Gráfico")),
+                      ),
                       // Ícone no canto inferior direito para REDIMENSIONAR
                       Align(
                         alignment: Alignment.bottomRight,
@@ -79,7 +94,11 @@ class _DashboardBuilderScreenState extends State<DashboardBuilderScreen> {
                               );
                             });
                           },
-                          child: const Icon(Icons.open_in_full, size: 16, color: Colors.grey),
+                          child: const Icon(
+                            Icons.open_in_full,
+                            size: 16,
+                            color: Colors.grey,
+                          ),
                         ),
                       ),
                     ],
@@ -94,7 +113,8 @@ class _DashboardBuilderScreenState extends State<DashboardBuilderScreen> {
   }
 
   void _salvarNoSupabase() {
-    // Aqui vamos transformar a lista 'graficosNoDash' em JSON e enviar para o banco
-    print("Salvando layout...");
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Use o editor principal para salvar.')),
+    );
   }
 }

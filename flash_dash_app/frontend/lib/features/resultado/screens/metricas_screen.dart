@@ -76,7 +76,7 @@ class _MetricasScreenState extends State<MetricasScreen> {
   Color _corMetricaPrincipal = const Color(0xFF2563EB);
   Color _corMetricaSecundaria = const Color(0xFFF59E0B);
   String _modoCorMetrica = 'categoria';
-  String _escalaMetricaSecundaria = 'mesma';
+  String _escalaMetricaSecundaria = 'automatico';
   Color _headerTabela = const Color(0xFF1D4ED8);
   Color _totalTabela = const Color(0xFFFDE047);
   Color _rowTabelaA = Colors.white;
@@ -403,8 +403,8 @@ class _MetricasScreenState extends State<MetricasScreen> {
         'calculatedMetrics': _metricasCalculadas.values
             .map((metric) => metric.toJson())
             .toList(),
-        if (met2 != null) 'metricaSecundaria': met2,
-        if (dim2 != null) 'dimensaoSecundaria': dim2,
+        'metricaSecundaria': ?met2,
+        'dimensaoSecundaria': ?dim2,
         'limiteItens': _limiteItens,
         'ordenarDesc': _ordenarDesc,
         'mostrarPontos': _mostrarPontos,
@@ -416,11 +416,11 @@ class _MetricasScreenState extends State<MetricasScreen> {
         'showSubtitle': _mostrarSubtitulo,
         'subtitleText': _subtitulo,
         'subtitleSize': _subtituloSize,
-        'subtitleColor': _subtituloColor.value.toString(),
+        'subtitleColor': _subtituloColor.toARGB32().toString(),
         'descriptionText': _descricao,
         'backgroundOpacity': _backgroundOpacity,
         'borderVisible': _mostrarBorda,
-        'borderColor': _corBorda.value.toString(),
+        'borderColor': _corBorda.toARGB32().toString(),
         'shadowOpacity': _shadowOpacity,
         'shadowBlur': _shadowBlur,
         'minWidth': _minWidth,
@@ -434,19 +434,19 @@ class _MetricasScreenState extends State<MetricasScreen> {
         'sufixo': _kpiSufixo,
         'decimais': _kpiDecimais,
         'kpiFontSize': _kpiFontSize,
-        'corPrincipal': _corPrincipal.value.toString(),
-        'corMetricaPrincipal': _corMetricaPrincipal.value.toString(),
-        'corMetricaSecundaria': _corMetricaSecundaria.value.toString(),
+        'corPrincipal': _corPrincipal.toARGB32().toString(),
+        'corMetricaPrincipal': _corMetricaPrincipal.toARGB32().toString(),
+        'corMetricaSecundaria': _corMetricaSecundaria.toARGB32().toString(),
         'metricColorMode': _modoCorMetrica,
         'secondaryScaleMode': _escalaMetricaSecundaria,
-        'barColor': _corMetricaPrincipal.value.toString(),
-        'stackColor': _corMetricaSecundaria.value.toString(),
-        'corMeta': const Color(0xFFEF4444).value.toString(),
-        'headerColor': _headerTabela.value.toString(),
-        'totalColor': _totalTabela.value.toString(),
-        'rowColorA': _rowTabelaA.value.toString(),
-        'rowColorB': _rowTabelaB.value.toString(),
-        'gridColor': _gridTabela.value.toString(),
+        'barColor': _corMetricaPrincipal.toARGB32().toString(),
+        'stackColor': _corMetricaSecundaria.toARGB32().toString(),
+        'corMeta': const Color(0xFFEF4444).toARGB32().toString(),
+        'headerColor': _headerTabela.toARGB32().toString(),
+        'totalColor': _totalTabela.toARGB32().toString(),
+        'rowColorA': _rowTabelaA.toARGB32().toString(),
+        'rowColorB': _rowTabelaB.toARGB32().toString(),
+        'gridColor': _gridTabela.toARGB32().toString(),
         'rowHeight': _rowHeight,
         'chipRadius': _chipRadius,
         'segmentacaoMultipla': _segmentacaoMultipla,
@@ -459,8 +459,8 @@ class _MetricasScreenState extends State<MetricasScreen> {
         'barOpacity': _barOpacity,
         'barBorderWidth': _barBorderWidth,
         'barColorMode': _barColorMode,
-        'lineColor': _corMetricaPrincipal.value.toString(),
-        'markerColor': _corMetricaPrincipal.value.toString(),
+        'lineColor': _corMetricaPrincipal.toARGB32().toString(),
+        'markerColor': _corMetricaPrincipal.toARGB32().toString(),
         'markerSize': _markerSize,
         'sliceOpacity': _sliceOpacity,
         'gaugeMostrarFaixas': _gaugeRanges,
@@ -884,7 +884,7 @@ class _MetricasScreenState extends State<MetricasScreen> {
                                 _dropdown(
                                   "Escala da segunda metrica",
                                   _escalaMetricaSecundaria,
-                                  ['mesma', 'independente'],
+                                  ['automatico', 'mesma', 'independente'],
                                   (v) => setModalState(
                                     () => _escalaMetricaSecundaria = v,
                                   ),
@@ -1371,10 +1371,16 @@ class _MetricasScreenState extends State<MetricasScreen> {
     ValueChanged<String> onChanged,
   ) {
     return DropdownButtonFormField<String>(
-      value: value,
+      initialValue: value,
+      isExpanded: true,
       decoration: InputDecoration(labelText: label),
       items: options
-          .map((o) => DropdownMenuItem(value: o, child: Text(o)))
+          .map(
+            (o) => DropdownMenuItem(
+              value: o,
+              child: Text(o, maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
+          )
           .toList(),
       onChanged: (v) {
         if (v != null) onChanged(v);
@@ -1514,6 +1520,10 @@ class _MetricasScreenState extends State<MetricasScreen> {
   Future<void> _abrirCriadorDeMetrica(List<String> metricasBase) async {
     final nomeController = TextEditingController();
     final formulaController = TextEditingController();
+    final metricasDisponiveis = <String>{
+      ...metricasBase,
+      ..._metricasCalculadas.keys,
+    }.toList();
 
     void inserir(String texto) {
       final atual = formulaController.text;
@@ -1607,7 +1617,7 @@ class _MetricasScreenState extends State<MetricasScreen> {
                             Wrap(
                               spacing: 8,
                               runSpacing: 8,
-                              children: metricasBase.map((metrica) {
+                              children: metricasDisponiveis.map((metrica) {
                                 return ActionChip(
                                   avatar: const Icon(
                                     Icons.data_array_rounded,
@@ -1713,7 +1723,18 @@ class _MetricasScreenState extends State<MetricasScreen> {
                           onPressed: () {
                             final nome = nomeController.text.trim();
                             final formula = formulaController.text.trim();
-                            if (nome.isEmpty || formula.isEmpty) return;
+                            final erro = validateCalculatedMetric(
+                              name: nome,
+                              formula: formula,
+                              baseMetrics: metricasBase,
+                              calculatedMetrics: _metricasCalculadas,
+                            );
+                            if (erro != null) {
+                              ScaffoldMessenger.of(
+                                context,
+                              ).showSnackBar(SnackBar(content: Text(erro)));
+                              return;
+                            }
                             setState(() {
                               _metricasCalculadas[nome] = CalculatedMetric(
                                 name: nome,
@@ -1932,13 +1953,18 @@ class _MetricasScreenState extends State<MetricasScreen> {
                   ),
                   const SizedBox(height: 24),
                   DropdownButtonFormField<String>(
-                    value: dimensoes.contains(dim) ? dim : null,
+                    initialValue: dimensoes.contains(dim) ? dim : null,
+                    isExpanded: true,
                     decoration: const InputDecoration(labelText: "Dimensao"),
                     items: dimensoes
                         .map(
                           (d) => DropdownMenuItem(
                             value: d.toString(),
-                            child: Text(d.toString()),
+                            child: Text(
+                              d.toString(),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         )
                         .toList(),
@@ -1950,6 +1976,7 @@ class _MetricasScreenState extends State<MetricasScreen> {
                     const SizedBox(height: 16),
                     DropdownButtonFormField<String>(
                       initialValue: dim2,
+                      isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: "Segunda dimensao",
                         helperText:
@@ -1959,7 +1986,11 @@ class _MetricasScreenState extends State<MetricasScreen> {
                           .map(
                             (item) => DropdownMenuItem(
                               value: item,
-                              child: Text(item),
+                              child: Text(
+                                item,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                           )
                           .toList(),
@@ -1970,13 +2001,18 @@ class _MetricasScreenState extends State<MetricasScreen> {
                   ],
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
-                    value: metricas.contains(met) ? met : null,
+                    initialValue: metricas.contains(met) ? met : null,
+                    isExpanded: true,
                     decoration: const InputDecoration(labelText: "Metrica"),
                     items: metricas
                         .map(
                           (m) => DropdownMenuItem(
                             value: m.toString(),
-                            child: Text(m.toString()),
+                            child: Text(
+                              m.toString(),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         )
                         .toList(),
@@ -2022,7 +2058,8 @@ class _MetricasScreenState extends State<MetricasScreen> {
                       metricaSecundariaPadrao.isNotEmpty) ...[
                     const SizedBox(height: 16),
                     DropdownButtonFormField<String>(
-                      value: met2,
+                      initialValue: met2,
+                      isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: "Segunda metrica",
                         helperText:
@@ -2030,7 +2067,14 @@ class _MetricasScreenState extends State<MetricasScreen> {
                       ),
                       items: metricaSecundariaPadrao
                           .map(
-                            (m) => DropdownMenuItem(value: m, child: Text(m)),
+                            (m) => DropdownMenuItem(
+                              value: m,
+                              child: Text(
+                                m,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                           )
                           .toList(),
                       onChanged: (val) =>

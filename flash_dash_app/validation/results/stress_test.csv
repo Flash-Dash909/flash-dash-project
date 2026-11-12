@@ -1,0 +1,5 @@
+﻿concurrency,requests,repetitions,errors,transport_errors,status_errors,error_rate,rps,latency_mean_ms,latency_p50_ms,latency_p95_ms,latency_p99_ms,latency_p95_min_ms,latency_p95_max_ms,server_cpu_peak_percent,server_rss_peak_mb,p95_pass,error_pass,approved
+100,5000,3,0,0,0,0.0,5728.08,11.66,11.06,22.71,32.31,18.91,26.94,48.44,768.68,True,True,True
+250,5000,3,0,0,0,0.0,5184.06,34.49,29.29,59.71,70.86,45.19,60.41,50.0,773.66,True,True,True
+500,5000,3,0,0,0,0.0,6330.34,62.52,61.55,93.97,119.37,91.13,119.4,48.51,785.34,True,True,True
+1000,5000,3,69,69,0,0.0138,5346.46,132.62,124.0,230.89,329.28,203.34,519.54,46.88,799.61,True,False,False

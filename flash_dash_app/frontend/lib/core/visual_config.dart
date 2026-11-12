@@ -64,8 +64,10 @@ class VisualCapabilities {
       !isHierarchy;
 
   bool get supportsSecondMetric =>
-      normalized.contains('empilh') ||
-      normalized.contains('100%') ||
+      isBar ||
+      isColumn ||
+      isLine ||
+      isArea ||
       isCombo ||
       isScatter ||
       isRadar ||
@@ -113,6 +115,10 @@ class PowerBiVisualConfig {
       'plotBorderColor': '4293059304',
       'plotBorderWidth': 1.0,
       'seriesPalette': List<String>.from(palette),
+      'corMetricaPrincipal': palette[0],
+      'corMetricaSecundaria': palette[2],
+      'metricColorMode': 'categoria',
+      'secondaryScaleMode': 'automatico',
       'paletteMode': 'categorical',
       'legendTitle': '',
       'legendFontSize': 10.0,

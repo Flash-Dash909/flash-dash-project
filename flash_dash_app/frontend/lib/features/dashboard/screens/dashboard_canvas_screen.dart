@@ -1,8 +1,16 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import '../../../core/api_config.dart';
 import '../../../core/calculated_metric.dart';
+import '../../../core/download_service.dart';
 import '../../../core/visual_config.dart';
 import '../../../core/widgets/app_logo.dart';
 import '../dashboard_manager.dart';
@@ -28,6 +36,89 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
   final Map<String, Set<String>> _selecoesVisuais = {};
   bool _isChatLoading = false;
   bool _modoApresentacao = false;
+  final GlobalKey _dashboardBoundaryKey = GlobalKey();
+  final TransformationController _canvasController = TransformationController();
+  Size? _lastCanvasViewport;
+
+  Future<Uint8List> _capturarDashboard() async {
+    await WidgetsBinding.instance.endOfFrame;
+    final boundary =
+        _dashboardBoundaryKey.currentContext?.findRenderObject()
+            as RenderRepaintBoundary?;
+    if (boundary == null) throw Exception('Dashboard ainda nao esta pronto.');
+    final image = await boundary.toImage(pixelRatio: 2);
+    final data = await image.toByteData(format: ui.ImageByteFormat.png);
+    if (data == null) throw Exception('Nao foi possivel gerar a imagem.');
+    return data.buffer.asUint8List();
+  }
+
+  Future<void> _exportarDashboardImagem(String formato) async {
+    try {
+      final png = await _capturarDashboard();
+      if (formato == 'png') {
+        await DownloadService.save(
+          bytes: png,
+          name: 'flash_dash_dashboard',
+          extension: 'png',
+          mimeType: 'image/png',
+        );
+      } else {
+        final document = pw.Document();
+        document.addPage(
+          pw.Page(
+            pageFormat: const PdfPageFormat(_dashboardWidth, _dashboardHeight),
+            margin: pw.EdgeInsets.zero,
+            build: (_) => pw.Image(pw.MemoryImage(png), fit: pw.BoxFit.contain),
+          ),
+        );
+        await DownloadService.save(
+          bytes: await document.save(),
+          name: 'flash_dash_dashboard',
+          extension: 'pdf',
+          mimeType: 'application/pdf',
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Falha ao exportar: $e')));
+      }
+    }
+  }
+
+  Future<void> _exportarDadosDashboard(String formato) async {
+    final dashboardId = DashboardManager.dashboardAtualId;
+    if (dashboardId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Salve o dashboard antes de exportar os dados.'),
+        ),
+      );
+      return;
+    }
+    final query = <String, String>{'formato': formato};
+    final usuarioId = DashboardManager.usuarioAtualId;
+    if (usuarioId != null) query['usuario_id'] = usuarioId;
+    final response = await http.get(
+      Uri.parse(
+        '${ApiConfig.baseUrl}/dashboards/$dashboardId/exportar',
+      ).replace(queryParameters: query),
+      headers: DashboardManager.authHeaders,
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Nao foi possivel exportar os dados.');
+    }
+    final ext = formato == 'json' ? 'json' : 'xlsx';
+    await DownloadService.save(
+      bytes: Uint8List.fromList(response.bodyBytes),
+      name: 'flash_dash_dashboard',
+      extension: ext,
+      mimeType: ext == 'json'
+          ? 'application/json'
+          : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+  }
 
   // ==========================================
   // Snap magnetico da grade.
@@ -35,6 +126,55 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
   double _snap(double value) {
     const double gridSize = 20.0;
     return (value / gridSize).roundToDouble() * gridSize;
+  }
+
+  void _limitarGeometriaDoVisual(
+    ChartConfig config, {
+    bool aplicarSnap = false,
+  }) {
+    final minWidth = ((config.configExtra['minWidth'] ?? 200) as num)
+        .toDouble()
+        .clamp(80.0, _dashboardWidth);
+    final minHeight = ((config.configExtra['minHeight'] ?? 200) as num)
+        .toDouble()
+        .clamp(80.0, _dashboardHeight);
+    var width = config.tamanho.width;
+    var height = config.tamanho.height;
+    var x = config.posicao.dx;
+    var y = config.posicao.dy;
+
+    if (aplicarSnap) {
+      width = _snap(width);
+      height = _snap(height);
+      x = _snap(x);
+      y = _snap(y);
+    }
+
+    width = width.clamp(minWidth, _dashboardWidth);
+    height = height.clamp(minHeight, _dashboardHeight);
+    x = x.clamp(0.0, math.max(0.0, _dashboardWidth - width));
+    y = y.clamp(0.0, math.max(0.0, _dashboardHeight - height));
+    config.tamanho = Size(width, height);
+    config.posicao = Offset(x, y);
+  }
+
+  List<String> _fonteIdsAtuais() {
+    final data = DashboardManager.dadosFonteAtual;
+    if (data == null) return const [];
+    final ids = <String>{};
+    final source = data['fonte'];
+    if (source is Map && source['id'] != null) {
+      ids.add(source['id'].toString());
+    }
+    final summaryRaw = data['dados_planilha']?['summary'] ?? data['summary'];
+    if (summaryRaw is Map && summaryRaw['fontes_origem'] is List) {
+      ids.addAll(
+        (summaryRaw['fontes_origem'] as List)
+            .where((item) => item != null)
+            .map((item) => item.toString()),
+      );
+    }
+    return ids.toList();
   }
 
   // ==========================================
@@ -102,20 +242,9 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.landscapeRight,
-      DeviceOrientation.landscapeLeft,
-    ]);
-  }
-
-  @override
   void dispose() {
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-    ]);
+    _canvasController.dispose();
+    _chatController.dispose();
     super.dispose();
   }
 
@@ -163,7 +292,9 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                                   if (d.containsKey("value2"))
                                     "value2": d["value2"],
                                   "color": d["color"] is Color
-                                      ? (d["color"] as Color).value.toString()
+                                      ? (d["color"] as Color)
+                                            .toARGB32()
+                                            .toString()
                                       : d["color"].toString(),
                                 },
                               )
@@ -172,13 +303,15 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                           "posicao_y": g.posicao.dy,
                           "largura": g.tamanho.width,
                           "altura": g.tamanho.height,
-                          "cor_fundo": g.corFundo.value.toString(),
+                          "cor_fundo": g.corFundo.toARGB32().toString(),
                           "mostrar_legenda": g.mostrarLegenda,
                           "posicao_legenda": g.posicaoLegenda,
                           "config_extra": g.configExtra,
                           "font_size_titulo": g.fontSizeTitulo,
                           "alinhamento_titulo": g.alinhamentoTitulo,
-                          "cor_texto_titulo": g.corTextoTitulo.value.toString(),
+                          "cor_texto_titulo": g.corTextoTitulo
+                              .toARGB32()
+                              .toString(),
                           "raio_borda": g.raioBorda,
                           "mostrar_sombra": g.mostrarSombra,
                           "mostrar_eixos": g.mostrarEixos,
@@ -190,9 +323,13 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
 
                   try {
                     var response = await http.post(
-                      Uri.parse('https://flash-dash-project-7.onrender.com/salvar-dashboard'),
-                      headers: {"Content-Type": "application/json"},
+                      Uri.parse('${ApiConfig.baseUrl}/salvar-dashboard'),
+                      headers: {
+                        "Content-Type": "application/json",
+                        ...DashboardManager.authHeaders,
+                      },
                       body: json.encode({
+                        "dashboard_id": DashboardManager.dashboardAtualId,
                         "titulo": nomeController.text,
                         "graficos_config": configJson,
                         "metricas_calculadas": DashboardManager
@@ -200,11 +337,22 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                             .values
                             .map((metric) => metric.toJson())
                             .toList(),
+                        "fonte_ids": _fonteIdsAtuais(),
                         "usuario_id": DashboardManager.usuarioAtualId,
                       }),
                     );
 
                     if (response.statusCode == 200) {
+                      final body = json.decode(utf8.decode(response.bodyBytes));
+                      final savedDashboard = body is Map
+                          ? body['dashboard']
+                          : null;
+                      if (savedDashboard is Map &&
+                          savedDashboard['id'] != null) {
+                        DashboardManager.dashboardAtualId = savedDashboard['id']
+                            .toString();
+                      }
+                      if (!mounted || !dialogContext.mounted) return;
                       DashboardManager.graficosAtivos.clear();
                       DashboardManager.metricasCalculadas.clear();
                       Navigator.pop(dialogContext);
@@ -214,6 +362,19 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                           builder: (context) => const HomeScreen(),
                         ),
                         (route) => false,
+                      );
+                    } else {
+                      final body = json.decode(utf8.decode(response.bodyBytes));
+                      final message = body is Map
+                          ? (body['detail'] ?? body['message'])?.toString()
+                          : null;
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            message ?? 'Nao foi possivel salvar o dashboard.',
+                          ),
+                        ),
                       );
                     }
                   } catch (e) {
@@ -268,7 +429,8 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
 
     try {
       final response = await http.delete(
-        Uri.parse("https://flash-dash-project-7.onrender.com/dashboards/$dashboardId"),
+        Uri.parse("${ApiConfig.baseUrl}/dashboards/$dashboardId"),
+        headers: DashboardManager.authHeaders,
       );
       if (!mounted) return;
       if (response.statusCode == 200) {
@@ -296,10 +458,11 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
   }
 
   void _abrirChatIA() {
+    final scheme = Theme.of(context).colorScheme;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: scheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -350,16 +513,18 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                               decoration: BoxDecoration(
                                 color: isUser
                                     ? Colors.blueAccent
-                                    : Colors.grey.shade100,
+                                    : scheme.surfaceContainerHighest,
                                 borderRadius: BorderRadius.circular(12),
                                 border: isUser
                                     ? null
-                                    : Border.all(color: Colors.grey.shade300),
+                                    : Border.all(color: scheme.outlineVariant),
                               ),
                               child: Text(
                                 _mensagensChat[index]['texto']!,
                                 style: TextStyle(
-                                  color: isUser ? Colors.white : Colors.black87,
+                                  color: isUser
+                                      ? Colors.white
+                                      : scheme.onSurface,
                                 ),
                               ),
                             ),
@@ -435,15 +600,20 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
         .toList();
 
     try {
-      var uri = Uri.parse('https://flash-dash-project-7.onrender.com/chat-ia');
-      var response = await http.post(
-        uri,
-        headers: {"Content-Type": "application/json"},
-        body: json.encode({
-          "mensagem": pergunta,
-          "contexto_dashboard": contextoDashboard,
-        }),
-      );
+      var uri = Uri.parse('${ApiConfig.baseUrl}/chat-ia');
+      var response = await http
+          .post(
+            uri,
+            headers: {
+              "Content-Type": "application/json",
+              ...DashboardManager.authHeaders,
+            },
+            body: json.encode({
+              "mensagem": pergunta,
+              "contexto_dashboard": contextoDashboard,
+            }),
+          )
+          .timeout(const Duration(seconds: 50));
 
       if (response.statusCode == 200) {
         var data = json.decode(utf8.decode(response.bodyBytes));
@@ -454,6 +624,15 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
       } else {
         throw Exception("Erro servidor: ${response.statusCode}");
       }
+    } on TimeoutException {
+      setModalState(() {
+        _mensagensChat.add({
+          'remetente': 'ia',
+          'texto':
+              'A IA demorou mais que o esperado. Tente novamente em alguns segundos.',
+        });
+        _isChatLoading = false;
+      });
     } catch (e) {
       setModalState(() {
         _mensagensChat.add({
@@ -575,7 +754,9 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
 
   @override
   Widget build(BuildContext context) {
-    bool isDesktop = MediaQuery.of(context).size.width >= 600;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isDesktop = screenWidth >= 720;
+    final theme = Theme.of(context);
 
     return Scaffold(
       appBar: _modoApresentacao
@@ -585,15 +766,16 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                 isDesktop ? 'Area de Trabalho' : 'Dashboard',
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
-              backgroundColor: Colors.white,
-              foregroundColor: const Color(0xFF0F172A),
+              backgroundColor: theme.colorScheme.surface,
+              foregroundColor: theme.colorScheme.onSurface,
               elevation: 1,
               shadowColor: Colors.black12,
               actions: [
-                const Padding(
-                  padding: EdgeInsets.only(right: 8),
-                  child: AppLogo(size: 30, opacity: 0.72),
-                ),
+                if (isDesktop)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 8),
+                    child: AppLogo(size: 30, opacity: 0.72),
+                  ),
                 IconButton(
                   icon: const Icon(
                     Icons.save_rounded,
@@ -602,27 +784,79 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                   onPressed: _salvarDashboard,
                   tooltip: "Salvar",
                 ),
-                IconButton(
-                  icon: const Icon(Icons.slideshow_rounded),
-                  onPressed: () => setState(() => _modoApresentacao = true),
-                  tooltip: "Modo apresentacao",
-                ),
-                IconButton(
-                  icon: const Icon(Icons.auto_awesome, color: Colors.amber),
-                  onPressed: _abrirChatIA,
-                  tooltip: "Chat com a IA",
-                ),
+                if (isDesktop) ...[
+                  IconButton(
+                    icon: const Icon(Icons.slideshow_rounded),
+                    onPressed: () => setState(() => _modoApresentacao = true),
+                    tooltip: "Modo apresentacao",
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.auto_awesome, color: Colors.amber),
+                    onPressed: _abrirChatIA,
+                    tooltip: "Chat com a IA",
+                  ),
+                ],
                 PopupMenuButton<String>(
                   tooltip: "Mais opcoes",
                   onSelected: (value) {
+                    if (value == 'apresentar') {
+                      setState(() => _modoApresentacao = true);
+                    }
+                    if (value == 'ia') _abrirChatIA();
                     if (value == 'excluir') _excluirDashboardAtual();
                     if (value == 'atualizar') setState(() {});
+                    if (value == 'png' || value == 'pdf') {
+                      _exportarDashboardImagem(value);
+                    }
+                    if (value == 'xlsx' || value == 'json') {
+                      final messenger = ScaffoldMessenger.of(context);
+                      _exportarDadosDashboard(value).catchError((e) {
+                        if (mounted) {
+                          messenger.showSnackBar(
+                            SnackBar(content: Text('Falha ao exportar: $e')),
+                          );
+                        }
+                      });
+                    }
                   },
                   itemBuilder: (context) => [
+                    if (!isDesktop) ...[
+                      const PopupMenuItem(
+                        value: 'apresentar',
+                        child: ListTile(
+                          leading: Icon(Icons.slideshow_rounded),
+                          title: Text('Modo apresentacao'),
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'ia',
+                        child: ListTile(
+                          leading: Icon(Icons.auto_awesome),
+                          title: Text('Chat com a IA'),
+                        ),
+                      ),
+                    ],
                     const PopupMenuItem(
                       value: 'atualizar',
                       child: Text('Atualizar layout'),
                     ),
+                    const PopupMenuItem(
+                      value: 'png',
+                      child: Text('Exportar PNG'),
+                    ),
+                    const PopupMenuItem(
+                      value: 'pdf',
+                      child: Text('Exportar PDF'),
+                    ),
+                    const PopupMenuItem(
+                      value: 'xlsx',
+                      child: Text('Exportar dados Excel'),
+                    ),
+                    const PopupMenuItem(
+                      value: 'json',
+                      child: Text('Exportar configuracao JSON'),
+                    ),
+                    const PopupMenuDivider(),
                     const PopupMenuItem(
                       value: 'excluir',
                       child: Text('Excluir dashboard'),
@@ -692,47 +926,71 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
             ? constraints.maxHeight
             : _dashboardHeight;
 
+        final viewport = Size(constraints.maxWidth, constraints.maxHeight);
+        if (_lastCanvasViewport != viewport &&
+            viewport.width.isFinite &&
+            viewport.height.isFinite) {
+          _lastCanvasViewport = viewport;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            final scale = math
+                .min(
+                  (viewport.width - 20) / _dashboardWidth,
+                  (viewport.height - 20) / _dashboardHeight,
+                )
+                .clamp(0.2, 1.0)
+                .toDouble();
+            _canvasController.value = Matrix4.diagonal3Values(scale, scale, 1);
+          });
+        }
+
         return Container(
           width: double.infinity,
           height: double.infinity,
-          color: _modoApresentacao ? Colors.black : const Color(0xFFF8FAFC),
+          color: _modoApresentacao
+              ? Colors.black
+              : Theme.of(context).scaffoldBackgroundColor,
           child: InteractiveViewer(
+            transformationController: _canvasController,
             boundaryMargin: const EdgeInsets.all(240),
-            minScale: 0.35,
+            minScale: 0.2,
             maxScale: 3.0,
             constrained: false,
             child: SizedBox(
               width: areaWidth,
               height: areaHeight,
               child: Center(
-                child: Container(
-                  width: _dashboardWidth,
-                  height: _dashboardHeight,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: _modoApresentacao
-                        ? null
-                        : Border.all(color: const Color(0xFFCBD5E1)),
-                    boxShadow: _modoApresentacao
-                        ? null
-                        : [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.08),
-                              blurRadius: 24,
-                              offset: const Offset(0, 12),
-                            ),
-                          ],
-                  ),
-                  child: ClipRect(
-                    child: Stack(
-                      clipBehavior: Clip.hardEdge,
-                      children: DashboardManager.graficosAtivos.map((config) {
-                        return Positioned(
-                          left: config.posicao.dx,
-                          top: config.posicao.dy,
-                          child: _buildResizableDraggableChart(config),
-                        );
-                      }).toList(),
+                child: RepaintBoundary(
+                  key: _dashboardBoundaryKey,
+                  child: Container(
+                    width: _dashboardWidth,
+                    height: _dashboardHeight,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: _modoApresentacao
+                          ? null
+                          : Border.all(color: const Color(0xFFCBD5E1)),
+                      boxShadow: _modoApresentacao
+                          ? null
+                          : [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.08),
+                                blurRadius: 24,
+                                offset: const Offset(0, 12),
+                              ),
+                            ],
+                    ),
+                    child: ClipRect(
+                      child: Stack(
+                        clipBehavior: Clip.hardEdge,
+                        children: DashboardManager.graficosAtivos.map((config) {
+                          return Positioned(
+                            left: config.posicao.dx,
+                            top: config.posicao.dy,
+                            child: _buildResizableDraggableChart(config),
+                          );
+                        }).toList(),
+                      ),
                     ),
                   ),
                 ),
@@ -748,6 +1006,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
   // Menu de edicao.
   // ==========================================
   void _abrirConfiguracoesBottomSheet(ChartConfig config) {
+    _limitarGeometriaDoVisual(config);
     final tituloController = TextEditingController(text: config.titulo);
     final subtituloController = TextEditingController(
       text: config.configExtra['subtitleText']?.toString() ?? '',
@@ -853,7 +1112,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
     var tempMetricColorMode =
         config.configExtra['metricColorMode']?.toString() ?? 'categoria';
     var tempSecondaryScaleMode =
-        config.configExtra['secondaryScaleMode']?.toString() ?? 'mesma';
+        config.configExtra['secondaryScaleMode']?.toString() ?? 'automatico';
     var tempHeaderTabela = _corConfig(
       config.configExtra['headerColor'],
       const Color(0xFF1D4ED8),
@@ -982,10 +1241,11 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
         tipoLower.contains('area') ||
         tipoLower.contains('dispers');
 
+    final scheme = Theme.of(context).colorScheme;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: scheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -1032,7 +1292,6 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
-                              color: Color(0xFF0F172A),
                             ),
                           ),
                           Text("Dimensao: ${config.dimensao}"),
@@ -1043,7 +1302,6 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
-                              color: Color(0xFF0F172A),
                             ),
                           ),
                           SwitchListTile(
@@ -1239,35 +1497,46 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                             "Largura: ${config.tamanho.width.toStringAsFixed(0)}",
                           ),
                           Slider(
-                            value: config.tamanho.width,
-                            min: tempMinWidth,
-                            max: 1200,
-                            onChanged: (v) => setModalState(
-                              () => config.tamanho = Size(
-                                v,
-                                config.tamanho.height,
-                              ),
+                            value: config.tamanho.width.clamp(
+                              tempMinWidth.clamp(80, _dashboardWidth),
+                              _dashboardWidth,
                             ),
+                            min: tempMinWidth.clamp(80, _dashboardWidth),
+                            max: _dashboardWidth,
+                            onChanged: (v) => setModalState(() {
+                              config.tamanho = Size(v, config.tamanho.height);
+                              _limitarGeometriaDoVisual(config);
+                            }),
                           ),
                           Text(
                             "Altura: ${config.tamanho.height.toStringAsFixed(0)}",
                           ),
                           Slider(
-                            value: config.tamanho.height,
-                            min: tempMinHeight,
-                            max: 900,
-                            onChanged: (v) => setModalState(
-                              () => config.tamanho = Size(
-                                config.tamanho.width,
-                                v,
-                              ),
+                            value: config.tamanho.height.clamp(
+                              tempMinHeight.clamp(80, _dashboardHeight),
+                              _dashboardHeight,
                             ),
+                            min: tempMinHeight.clamp(80, _dashboardHeight),
+                            max: _dashboardHeight,
+                            onChanged: (v) => setModalState(() {
+                              config.tamanho = Size(config.tamanho.width, v);
+                              _limitarGeometriaDoVisual(config);
+                            }),
                           ),
                           Text("X: ${config.posicao.dx.toStringAsFixed(0)}"),
                           Slider(
-                            value: config.posicao.dx.clamp(0, 10000),
+                            value: config.posicao.dx.clamp(
+                              0,
+                              math.max(
+                                0,
+                                _dashboardWidth - config.tamanho.width,
+                              ),
+                            ),
                             min: 0,
-                            max: 10000,
+                            max: math.max(
+                              0,
+                              _dashboardWidth - config.tamanho.width,
+                            ),
                             onChanged: (v) => setModalState(
                               () =>
                                   config.posicao = Offset(v, config.posicao.dy),
@@ -1275,9 +1544,18 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                           ),
                           Text("Y: ${config.posicao.dy.toStringAsFixed(0)}"),
                           Slider(
-                            value: config.posicao.dy.clamp(0, 10000),
+                            value: config.posicao.dy.clamp(
+                              0,
+                              math.max(
+                                0,
+                                _dashboardHeight - config.tamanho.height,
+                              ),
+                            ),
                             min: 0,
-                            max: 10000,
+                            max: math.max(
+                              0,
+                              _dashboardHeight - config.tamanho.height,
+                            ),
                             onChanged: (v) => setModalState(
                               () =>
                                   config.posicao = Offset(config.posicao.dx, v),
@@ -1289,8 +1567,8 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                               OutlinedButton.icon(
                                 onPressed: () => setModalState(() {
                                   config.posicao = Offset(
-                                    MediaQuery.of(context).size.width / 2 -
-                                        config.tamanho.width / 2,
+                                    (_dashboardWidth - config.tamanho.width) /
+                                        2,
                                     config.posicao.dy,
                                   );
                                 }),
@@ -1301,8 +1579,8 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                                 onPressed: () => setModalState(() {
                                   config.posicao = Offset(
                                     config.posicao.dx,
-                                    MediaQuery.of(context).size.height / 2 -
-                                        config.tamanho.height / 2,
+                                    (_dashboardHeight - config.tamanho.height) /
+                                        2,
                                   );
                                 }),
                                 icon: const Icon(Icons.align_vertical_center),
@@ -1394,7 +1672,6 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
-                              color: Color(0xFF0F172A),
                             ),
                           ),
                           if (usaLegenda)
@@ -1456,7 +1733,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                             ),
                             if (!usaMetricaSecundaria)
                               DropdownButtonFormField<String>(
-                                value: tempMetricColorMode,
+                                initialValue: tempMetricColorMode,
                                 decoration: const InputDecoration(
                                   labelText: "Aplicar cores",
                                 ),
@@ -1526,7 +1803,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                                         .toList(),
                               ),
                               DropdownButtonFormField<String>(
-                                value: tempSecondaryScaleMode,
+                                initialValue: tempSecondaryScaleMode,
                                 decoration: const InputDecoration(
                                   labelText: "Escala da segunda metrica",
                                 ),
@@ -1655,7 +1932,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                               ),
                             ),
                             DropdownButtonFormField<String>(
-                              value: tempBarColorMode,
+                              initialValue: tempBarColorMode,
                               decoration: const InputDecoration(
                                 labelText: "Cores",
                               ),
@@ -2031,7 +2308,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                                       .toList(),
                             ),
                             DropdownButtonFormField<String>(
-                              value: tempSlicerStyle,
+                              initialValue: tempSlicerStyle,
                               decoration: const InputDecoration(
                                 labelText: "Estilo",
                               ),
@@ -2099,7 +2376,6 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
-                              color: Color(0xFF0F172A),
                             ),
                           ),
                           SwitchListTile(
@@ -2172,7 +2448,6 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
-                              color: Color(0xFF0F172A),
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -2217,7 +2492,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                             config.configExtra['subtitleSize'] =
                                 tempSubtituloSize;
                             config.configExtra['subtitleColor'] =
-                                tempSubtituloColor.value.toString();
+                                tempSubtituloColor.toARGB32().toString();
                             config.configExtra['descriptionText'] =
                                 descricaoController.text;
                             config.configExtra['backgroundOpacity'] =
@@ -2225,7 +2500,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                             config.configExtra['borderVisible'] =
                                 tempBorderVisible;
                             config.configExtra['borderColor'] = tempBorderColor
-                                .value
+                                .toARGB32()
                                 .toString();
                             config.configExtra['shadowOpacity'] =
                                 tempShadowOpacity;
@@ -2244,7 +2519,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                             config.configExtra['espessuraLinha'] =
                                 tempEspessuraLinha;
                             config.configExtra['lineColor'] = tempLineColor
-                                .value
+                                .toARGB32()
                                 .toString();
                             config.configExtra['markerSize'] = tempMarkerSize;
                             config.configExtra['barGap'] = tempBarGap;
@@ -2270,35 +2545,35 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                                 tempKpiShowTrend;
                             config.configExtra['kpiPrevious'] = tempKpiPrevious;
                             config.configExtra['corPrincipal'] =
-                                tempCorPrincipal.value.toString();
+                                tempCorPrincipal.toARGB32().toString();
                             config.configExtra['corMetricaPrincipal'] =
-                                tempCorMetricaPrincipal.value.toString();
+                                tempCorMetricaPrincipal.toARGB32().toString();
                             config.configExtra['corMetricaSecundaria'] =
-                                tempCorMetricaSecundaria.value.toString();
+                                tempCorMetricaSecundaria.toARGB32().toString();
                             config.configExtra['metricColorMode'] =
                                 tempMetricColorMode;
                             config.configExtra['secondaryScaleMode'] =
                                 tempSecondaryScaleMode;
                             config.configExtra['barColor'] =
-                                tempCorMetricaPrincipal.value.toString();
+                                tempCorMetricaPrincipal.toARGB32().toString();
                             config.configExtra['stackColor'] =
-                                tempCorMetricaSecundaria.value.toString();
+                                tempCorMetricaSecundaria.toARGB32().toString();
                             config.configExtra['markerColor'] =
-                                tempCorMetricaPrincipal.value.toString();
+                                tempCorMetricaPrincipal.toARGB32().toString();
                             config.configExtra['headerColor'] = tempHeaderTabela
-                                .value
+                                .toARGB32()
                                 .toString();
                             config.configExtra['totalColor'] = tempTotalTabela
-                                .value
+                                .toARGB32()
                                 .toString();
                             config.configExtra['rowColorA'] = tempRowColorA
-                                .value
+                                .toARGB32()
                                 .toString();
                             config.configExtra['rowColorB'] = tempRowColorB
-                                .value
+                                .toARGB32()
                                 .toString();
                             config.configExtra['gridColor'] = tempGridColor
-                                .value
+                                .toARGB32()
                                 .toString();
                             config.configExtra['rowHeight'] = tempRowHeight;
                             config.configExtra['chipRadius'] = tempChipRadius;
@@ -2638,15 +2913,25 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
             {
               'label': config.metrica,
               'color': config.configExtra['corMetricaPrincipal'],
+              'value': visualConfig.dados.fold<double>(
+                0,
+                (sum, item) => sum + ((item['value'] ?? 0) as num).toDouble(),
+              ),
             },
             {
               'label':
                   config.configExtra['metricaSecundaria']?.toString() ??
                   'Segunda metrica',
               'color': config.configExtra['corMetricaSecundaria'],
+              'value': visualConfig.dados.fold<double>(
+                0,
+                (sum, item) => sum + ((item['value2'] ?? 0) as num).toDouble(),
+              ),
             },
           ]
         : visualConfig.dados;
+    final showLegendValues =
+        config.configExtra['legendShowValues'] as bool? ?? false;
 
     Widget legenda = Wrap(
       spacing: 8,
@@ -2670,9 +2955,15 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                   margin: const EdgeInsets.only(right: 4),
                 ),
                 Text(
-                  d['label'].toString().length > 12
-                      ? '${d['label'].toString().substring(0, 12)}...'
-                      : d['label'].toString(),
+                  () {
+                    final rawLabel = d['label'].toString();
+                    final label = rawLabel.length > 12
+                        ? '${rawLabel.substring(0, 12)}...'
+                        : rawLabel;
+                    final rawValue = d['value'];
+                    if (!showLegendValues || rawValue is! num) return label;
+                    return '$label  ${formatarValorVisual(config, rawValue.toDouble())}';
+                  }(),
                   style: TextStyle(
                     fontSize:
                         ((config.configExtra['legendFontSize'] ?? 10) as num)
@@ -2727,7 +3018,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
       ),
     );
 
-    if (config.posicaoLegenda == 'top')
+    if (config.posicaoLegenda == 'top') {
       return Column(
         children: [
           safeLegenda,
@@ -2735,7 +3026,8 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
           Expanded(child: chartWidget),
         ],
       );
-    if (config.posicaoLegenda == 'bottom')
+    }
+    if (config.posicaoLegenda == 'bottom') {
       return Column(
         children: [
           Expanded(child: chartWidget),
@@ -2743,7 +3035,8 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
           safeLegenda,
         ],
       );
-    if (config.posicaoLegenda == 'left')
+    }
+    if (config.posicaoLegenda == 'left') {
       return Row(
         children: [
           safeLegenda,
@@ -2751,7 +3044,8 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
           Expanded(child: chartWidget),
         ],
       );
-    if (config.posicaoLegenda == 'right')
+    }
+    if (config.posicaoLegenda == 'right') {
       return Row(
         children: [
           Expanded(child: chartWidget),
@@ -2759,6 +3053,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
           safeLegenda,
         ],
       );
+    }
 
     return chartWidget;
   }
@@ -2866,9 +3161,9 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                                   () => config.posicao += details.delta,
                                 ),
                                 onPanEnd: (_) => setState(
-                                  () => config.posicao = Offset(
-                                    _snap(config.posicao.dx),
-                                    _snap(config.posicao.dy),
+                                  () => _limitarGeometriaDoVisual(
+                                    config,
+                                    aplicarSnap: true,
                                   ),
                                 ),
                                 // Ãcone de arraste super discreto e com cor suave
@@ -2889,9 +3184,9 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                                     () => config.posicao += details.delta,
                                   ),
                                   onPanEnd: (_) => setState(
-                                    () => config.posicao = Offset(
-                                      _snap(config.posicao.dx),
-                                      _snap(config.posicao.dy),
+                                    () => _limitarGeometriaDoVisual(
+                                      config,
+                                      aplicarSnap: true,
                                     ),
                                   ),
                                   child: Column(
@@ -3027,17 +3322,16 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                     onPanUpdate: (details) => setState(() {
                       double novaLargura =
                           config.tamanho.width + details.delta.dx;
-                      if (novaLargura >= minWidth)
+                      if (novaLargura >= minWidth) {
                         config.tamanho = Size(
                           novaLargura,
                           config.tamanho.height,
                         );
+                      }
                     }),
                     onPanEnd: (_) => setState(
-                      () => config.tamanho = Size(
-                        _snap(config.tamanho.width),
-                        config.tamanho.height,
-                      ),
+                      () =>
+                          _limitarGeometriaDoVisual(config, aplicarSnap: true),
                     ),
                     child: Container(
                       width: espessuraBorda,
@@ -3070,16 +3364,10 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                         );
                       }
                     }),
-                    onPanEnd: (_) => setState(() {
-                      config.posicao = Offset(
-                        _snap(config.posicao.dx),
-                        config.posicao.dy,
-                      );
-                      config.tamanho = Size(
-                        _snap(config.tamanho.width),
-                        config.tamanho.height,
-                      );
-                    }),
+                    onPanEnd: (_) => setState(
+                      () =>
+                          _limitarGeometriaDoVisual(config, aplicarSnap: true),
+                    ),
                     child: Container(
                       width: espessuraBorda,
                       height: double.infinity,
@@ -3100,14 +3388,13 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                     onPanUpdate: (details) => setState(() {
                       double novaAltura =
                           config.tamanho.height + details.delta.dy;
-                      if (novaAltura >= minHeight)
+                      if (novaAltura >= minHeight) {
                         config.tamanho = Size(config.tamanho.width, novaAltura);
+                      }
                     }),
                     onPanEnd: (_) => setState(
-                      () => config.tamanho = Size(
-                        config.tamanho.width,
-                        _snap(config.tamanho.height),
-                      ),
+                      () =>
+                          _limitarGeometriaDoVisual(config, aplicarSnap: true),
                     ),
                     child: Container(
                       width: double.infinity,
@@ -3137,16 +3424,10 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                         config.tamanho = Size(config.tamanho.width, novaAltura);
                       }
                     }),
-                    onPanEnd: (_) => setState(() {
-                      config.posicao = Offset(
-                        config.posicao.dx,
-                        _snap(config.posicao.dy),
-                      );
-                      config.tamanho = Size(
-                        config.tamanho.width,
-                        _snap(config.tamanho.height),
-                      );
-                    }),
+                    onPanEnd: (_) => setState(
+                      () =>
+                          _limitarGeometriaDoVisual(config, aplicarSnap: true),
+                    ),
                     child: Container(
                       width: double.infinity,
                       height: espessuraBorda,
@@ -3174,12 +3455,10 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                         novaAltura > minHeight ? novaAltura : minHeight,
                       );
                     }),
-                    onPanEnd: (_) => setState(() {
-                      config.tamanho = Size(
-                        _snap(config.tamanho.width),
-                        _snap(config.tamanho.height),
-                      );
-                    }),
+                    onPanEnd: (_) => setState(
+                      () =>
+                          _limitarGeometriaDoVisual(config, aplicarSnap: true),
+                    ),
                     child: Container(
                       width: 28,
                       height: 28,
@@ -3207,8 +3486,9 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
   Color _converterCor(dynamic corOrigem) {
     if (corOrigem is Color) return corOrigem;
     if (corOrigem is String) {
-      if (corOrigem.startsWith('#'))
+      if (corOrigem.startsWith('#')) {
         return Color(int.parse(corOrigem.replaceFirst('#', '0xFF')));
+      }
       int? valorNumerico = int.tryParse(corOrigem);
       if (valorNumerico != null) return Color(valorNumerico);
     }

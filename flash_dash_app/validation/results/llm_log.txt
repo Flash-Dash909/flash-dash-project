@@ -1,0 +1,23 @@
+{
+  "generated_at": "2026-10-16T22:14:09.038017+00:00",
+  "model": "gemini-2.5-flash",
+  "cases": 14,
+  "repetitions": 1,
+  "attempts": 14,
+  "response_rate": 0.7857142857142857,
+  "top1_accuracy": 0.7142857142857143,
+  "top1_ci95": [
+    0.4535045882751561,
+    0.882788120898909
+  ],
+  "top3_accuracy": 0.7142857142857143,
+  "top3_ci95": [
+    0.4535045882751561,
+    0.882788120898909
+  ],
+  "valid_catalog_rate": 0.7857142857142857,
+  "valid_fields_rate": 0.7857142857142857,
+  "mean_latency_ms": 8674.474545454546,
+  "note": "Falhas de resposta contam como erro nas metricas Top-k."
+}
+

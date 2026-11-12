@@ -1,0 +1,27 @@
+{
+  "generated_at": "2026-10-16T22:12:21.321624+00:00",
+  "auth_tests": {
+    "status": "passed",
+    "return_code": 0
+  },
+  "bandit": {
+    "status": "completed",
+    "severity": {
+      "LOW": 0,
+      "MEDIUM": 0,
+      "HIGH": 0
+    }
+  },
+  "pip_audit": {
+    "status": "completed",
+    "vulnerabilities": 0,
+    "return_code": 0
+  },
+  "mttr_hours": null,
+  "mttr_sample": 0,
+  "acceptance": {
+    "auth_isolation_passed": true,
+    "no_high_bandit_findings": true,
+    "dependency_audit_clean": true
+  }
+}

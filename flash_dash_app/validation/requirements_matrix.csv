@@ -1,0 +1,16 @@
+id,tipo,requisito,metodo,evidencia,criterio
+RF-01,Funcional,Importar formatos tabulares suportados,Pytest parametrizado,backend_tests.xml,100% aprovado
+RF-02,Funcional,Limpar normalizar deduplicar e pseudonimizar,Pytest e benchmark ETL,backend_tests.xml;etl_benchmark.csv,100% dos casos de referencia
+RF-03,Funcional,Gerar esquema estrela automaticamente,Pytest e conjunto rotulado,backend_tests.xml;modeling_evaluation.json,>=90% no conjunto rotulado
+RF-04,Funcional,Recomendar visuais por LLM,Avaliacao Top-k,llm_evaluation.json,Top-3 >=80%
+RF-05,Funcional,Criar editar salvar e exportar dashboard,Teste de integracao Flutter,flutter_tests.txt,100% dos fluxos criticos
+RF-06,Funcional,Isolar dados por usuario,Teste de autorizacao,backend_tests.xml,zero acesso cruzado
+RF-07,Funcional,Manter auditoria ETL e exportar dados,Teste de integracao,backend_tests.xml,100% aprovado
+RNF-01,Nao funcional,Responsividade,Widget tests em matriz de viewports,responsive_tests.txt,zero overflow
+RNF-02,Nao funcional,Latencia da API,Teste de carga,load_test.csv,p95 <500 ms em 25 clientes
+RNF-03,Nao funcional,Vazao do Auto-Cleaning,Benchmark sintetico,etl_benchmark.csv,p95 <5 s em 50 mil linhas
+RNF-04,Nao funcional,Escalabilidade,Curva de carga,load_test.csv,erro <1% em 25 clientes
+RNF-05,Nao funcional,Seguranca,Pytest Bandit e pip-audit,security_summary.json,zero critico/alto aberto
+RNF-06,Nao funcional,Usabilidade,SUS CSAT e tarefas,usability_metrics.json,conclusao >=90%; SUS >=68; CSAT >=4
+RNF-07,Nao funcional,Confiabilidade,Taxa de sucesso de execucoes,RELATORIO_VALIDACAO.md,>=99% nos testes de carga
+RNF-08,Nao funcional,Estresse e limite operacional,Curva ampliada de concorrencia,stress_test.csv,p95 <1000 ms e erro <1% em 500 requisicoes simultaneas

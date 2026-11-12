@@ -1,0 +1,9 @@
+﻿case,expected,predicted,true_positives,exact_match,structural_validity,error
+one_to_many_alias,1,1,1,True,True,
+one_to_one,1,1,1,True,True,
+many_to_many,1,1,1,True,True,
+three_source_star,2,2,2,True,True,
+numeric_text_keys,1,1,1,True,True,
+partial_referential_integrity,1,1,1,True,True,
+generic_id_collision,0,0,0,True,True,
+disjoint_named_keys,0,0,0,True,True,

@@ -1,0 +1,9 @@
+task_id,tarefa,estado_inicial,criterio_de_conclusao,tempo_alvo_s
+T01,Criar conta e entrar no Flash Dash,Tela de login,Home exibida com usuario autenticado,90
+T02,Importar uma planilha complexa,Home sem fonte selecionada,Tratamento concluido e resumo exibido,120
+T03,Verificar limpeza e logs ETL,Fonte processada,Usuario identifica ao menos duas transformacoes,60
+T04,Inspecionar e ajustar o modelo estrela,Tela de logs,Relacao aberta alterada e confirmada,90
+T05,Criar um visual recomendado,Fonte processada,Visual adicionado ao dashboard,120
+T06,Personalizar titulo cores e rotulos,Dashboard com visual,Alteracoes visiveis no visual,120
+T07,Salvar e reabrir o dashboard,Dashboard editado,Dashboard aparece na home e reabre,90
+T08,Exportar dados tratados e dashboard,Dashboard salvo,Arquivos exportados sao abertos com sucesso,90
