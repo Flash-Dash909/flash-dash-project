@@ -44,6 +44,55 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
   final TransformationController _canvasController = TransformationController();
   Size? _lastCanvasViewport;
 
+  bool get _temFiltrosAtivos =>
+      _filtrosSegmentacao.values.any((valores) => valores.isNotEmpty) ||
+      _selecoesVisuais.values.any((valores) => valores.isNotEmpty);
+
+  void _limparFiltros() {
+    if (!_temFiltrosAtivos) return;
+    setState(() {
+      _filtrosSegmentacao.clear();
+      _selecoesVisuais.clear();
+    });
+  }
+
+  Future<void> _excluirVisual(ChartConfig config) async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Excluir visual'),
+        content: Text('Deseja excluir "${config.titulo}" deste dashboard?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            icon: const Icon(Icons.delete_outline_rounded),
+            label: const Text('Excluir'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmar != true) return;
+    setState(() {
+      DashboardManager.graficosAtivos.remove(config);
+      _selecoesVisuais.remove(config.id);
+      if (config.tipo.toLowerCase().contains('segment')) {
+        final outraSegmentacao = DashboardManager.graficosAtivos.any(
+          (grafico) =>
+              grafico.tipo.toLowerCase().contains('segment') &&
+              grafico.dimensao == config.dimensao,
+        );
+        if (!outraSegmentacao) {
+          _filtrosSegmentacao.remove(config.dimensao);
+        }
+      }
+    });
+  }
+
   Future<Uint8List> _capturarDashboard() async {
     await WidgetsBinding.instance.endOfFrame;
     final boundary =
@@ -239,10 +288,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
     if (acao == 'editar') {
       _abrirConfiguracoesBottomSheet(config);
     } else if (acao == 'excluir') {
-      setState(() {
-        DashboardManager.graficosAtivos.remove(config);
-        _selecoesVisuais.remove(config.id);
-      });
+      await _excluirVisual(config);
     }
   }
 
@@ -257,6 +303,13 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
   }
 
   Future<void> _definirModoApresentacao(bool ativo) async {
+    if (!mounted || _modoApresentacao == ativo) return;
+    setState(() {
+      _modoApresentacao = ativo;
+      _arrastandoVisual = false;
+      _lastCanvasViewport = null;
+      _canvasController.value = Matrix4.identity();
+    });
     try {
       if (ativo) {
         await PresentationFullscreen.enter();
@@ -276,8 +329,6 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
         );
       }
     }
-    if (!mounted) return;
-    setState(() => _modoApresentacao = ativo);
   }
 
   Future<void> _abrirDadosDashboard() async {
@@ -716,11 +767,13 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
   }
 
   void _iniciarArrasteVisual(ChartConfig config) {
+    if (_modoApresentacao) return;
     _trazerParaFrente(config);
     if (!_arrastandoVisual) setState(() => _arrastandoVisual = true);
   }
 
   void _moverVisual(ChartConfig config, DragUpdateDetails details) {
+    if (_modoApresentacao) return;
     final delta = _deltaNoCanvas(details);
     setState(() => config.posicao += delta);
   }
@@ -732,6 +785,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
   }
 
   void _finalizarArrasteVisual(ChartConfig config) {
+    if (_modoApresentacao) return;
     setState(() {
       _arrastandoVisual = false;
       _limitarGeometriaDoVisual(config, aplicarSnap: true);
@@ -1111,6 +1165,12 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                   onPressed: _abrirDadosDashboard,
                   tooltip: 'Dados e fontes do dashboard',
                 ),
+                if (isDesktop)
+                  IconButton(
+                    icon: const Icon(Icons.filter_alt_off_rounded),
+                    onPressed: _temFiltrosAtivos ? _limparFiltros : null,
+                    tooltip: 'Limpar todos os filtros',
+                  ),
                 IconButton(
                   icon: const Icon(
                     Icons.save_rounded,
@@ -1151,6 +1211,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                       setState(() => _snapAtivo = !_snapAtivo);
                     }
                     if (value == 'ia') _abrirChatIA();
+                    if (value == 'limpar_filtros') _limparFiltros();
                     if (value == 'excluir') _excluirDashboardAtual();
                     if (value == 'atualizar') setState(() {});
                     if (value == 'png' || value == 'pdf') {
@@ -1188,6 +1249,16 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                       value: 'atualizar',
                       child: Text('Atualizar layout'),
                     ),
+                    PopupMenuItem(
+                      value: 'limpar_filtros',
+                      enabled: _temFiltrosAtivos,
+                      child: const ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.filter_alt_off_rounded),
+                        title: Text('Limpar todos os filtros'),
+                      ),
+                    ),
                     CheckedPopupMenuItem(
                       value: 'snap',
                       checked: _snapAtivo,
@@ -1218,31 +1289,53 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                 ),
               ],
             ),
-      body: Stack(
-        children: [
-          _buildCanvas(),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Align(
-              alignment: Alignment.bottomCenter,
-              child: _buildNavegacaoPaginas(),
-            ),
-          ),
-          if (_modoApresentacao)
-            Positioned(
-              top: 12,
-              right: 12,
-              child: SafeArea(
-                child: FilledButton.tonalIcon(
-                  onPressed: () => _definirModoApresentacao(false),
-                  icon: const Icon(Icons.close_fullscreen_rounded),
-                  label: const Text('Sair'),
+      body: CallbackShortcuts(
+        bindings: <ShortcutActivator, VoidCallback>{
+          const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
+              _mudarPagina(DashboardManager.paginaAtual - 1),
+          const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
+              _mudarPagina(DashboardManager.paginaAtual + 1),
+        },
+        child: Focus(
+          autofocus: true,
+          child: Stack(
+            children: [
+              _buildCanvas(),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: _buildNavegacaoPaginas(),
                 ),
               ),
-            ),
-        ],
+              if (_modoApresentacao)
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  child: SafeArea(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton.filledTonal(
+                          onPressed: _temFiltrosAtivos ? _limparFiltros : null,
+                          tooltip: 'Limpar todos os filtros',
+                          icon: const Icon(Icons.filter_alt_off_rounded),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton.tonalIcon(
+                          onPressed: () => _definirModoApresentacao(false),
+                          icon: const Icon(Icons.close_fullscreen_rounded),
+                          label: const Text('Sair'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
       floatingActionButton: _modoApresentacao
           ? null
@@ -1281,6 +1374,19 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
   Widget _buildCanvas() {
     return LayoutBuilder(
       builder: (context, constraints) {
+        if (_modoApresentacao) {
+          return ColoredBox(
+            color: Colors.white,
+            child: SizedBox.expand(
+              child: FittedBox(
+                fit: BoxFit.contain,
+                alignment: Alignment.center,
+                child: _buildDashboardSurface(apresentacao: true),
+              ),
+            ),
+          );
+        }
+
         final areaWidth = constraints.maxWidth > _dashboardWidth
             ? constraints.maxWidth
             : _dashboardWidth;
@@ -1309,9 +1415,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
         return Container(
           width: double.infinity,
           height: double.infinity,
-          color: _modoApresentacao
-              ? Colors.black
-              : Theme.of(context).scaffoldBackgroundColor,
+          color: Theme.of(context).scaffoldBackgroundColor,
           child: InteractiveViewer(
             transformationController: _canvasController,
             panEnabled: !_arrastandoVisual,
@@ -1322,53 +1426,54 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
             child: SizedBox(
               width: areaWidth,
               height: areaHeight,
-              child: Center(
-                child: RepaintBoundary(
-                  key: _dashboardBoundaryKey,
-                  child: Container(
-                    width: _dashboardWidth,
-                    height: _dashboardHeight,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: _modoApresentacao
-                          ? null
-                          : Border.all(color: const Color(0xFFCBD5E1)),
-                      boxShadow: _modoApresentacao
-                          ? null
-                          : [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.08),
-                                blurRadius: 24,
-                                offset: const Offset(0, 12),
-                              ),
-                            ],
-                    ),
-                    child: ClipRect(
-                      child: Stack(
-                        clipBehavior: Clip.hardEdge,
-                        children: DashboardManager.graficosAtivos
-                            .where(
-                              (config) =>
-                                  config.pagina == DashboardManager.paginaAtual,
-                            )
-                            .map((config) {
-                              return Positioned(
-                                key: ValueKey(config.id),
-                                left: config.posicao.dx,
-                                top: config.posicao.dy,
-                                child: _buildResizableDraggableChart(config),
-                              );
-                            })
-                            .toList(),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+              child: Center(child: _buildDashboardSurface(apresentacao: false)),
             ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildDashboardSurface({required bool apresentacao}) {
+    return RepaintBoundary(
+      key: _dashboardBoundaryKey,
+      child: Container(
+        width: _dashboardWidth,
+        height: _dashboardHeight,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: apresentacao
+              ? null
+              : Border.all(color: const Color(0xFFCBD5E1)),
+          boxShadow: apresentacao
+              ? null
+              : [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 24,
+                    offset: const Offset(0, 12),
+                  ),
+                ],
+        ),
+        child: ClipRect(
+          child: Stack(
+            clipBehavior: Clip.hardEdge,
+            children: DashboardManager.graficosAtivos
+                .where(
+                  (config) => config.pagina == DashboardManager.paginaAtual,
+                )
+                .map(
+                  (config) => Positioned(
+                    key: ValueKey(config.id),
+                    left: config.posicao.dx,
+                    top: config.posicao.dy,
+                    child: _buildResizableDraggableChart(config),
+                  ),
+                )
+                .toList(),
+          ),
+        ),
+      ),
     );
   }
 
@@ -1539,6 +1644,28 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
       config.tipo,
       config.configExtra,
     );
+
+    if (!const {'categoria', 'metrica'}.contains(tempMetricColorMode)) {
+      tempMetricColorMode = 'categoria';
+    }
+    if (!const {
+      'automatico',
+      'mesma',
+      'independente',
+    }.contains(tempSecondaryScaleMode)) {
+      tempSecondaryScaleMode = 'automatico';
+    }
+    if (!const {'categoria', 'unica'}.contains(tempBarColorMode)) {
+      tempBarColorMode = 'categoria';
+    }
+    if (!const {
+      'botoes',
+      'lista',
+      'tags',
+      'dropdown',
+    }.contains(tempSlicerStyle)) {
+      tempSlicerStyle = 'botoes';
+    }
 
     void sincronizarPowerBi(Map<String, dynamic> value) {
       tempPowerBiConfig = Map<String, dynamic>.from(value);
@@ -2178,6 +2305,10 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                                   labelText: "Escala da segunda metrica",
                                 ),
                                 items: const [
+                                  DropdownMenuItem(
+                                    value: 'automatico',
+                                    child: Text("Automatica"),
+                                  ),
                                   DropdownMenuItem(
                                     value: 'mesma',
                                     child: Text("Mesma escala"),
@@ -3467,44 +3598,50 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
       ),
     );
 
-    if (config.posicaoLegenda == 'top') {
-      return Column(
-        children: [
-          safeLegenda,
-          const SizedBox(height: 8),
-          Expanded(child: chartWidget),
-        ],
-      );
-    }
-    if (config.posicaoLegenda == 'bottom') {
-      return Column(
-        children: [
-          Expanded(child: chartWidget),
-          const SizedBox(height: 8),
-          safeLegenda,
-        ],
-      );
-    }
-    if (config.posicaoLegenda == 'left') {
-      return Row(
-        children: [
-          safeLegenda,
-          const SizedBox(width: 8),
-          Expanded(child: chartWidget),
-        ],
-      );
-    }
-    if (config.posicaoLegenda == 'right') {
-      return Row(
-        children: [
-          Expanded(child: chartWidget),
-          const SizedBox(width: 8),
-          safeLegenda,
-        ],
-      );
-    }
-
-    return chartWidget;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxHeight < 120 || constraints.maxWidth < 180) {
+          return chartWidget;
+        }
+        if (config.posicaoLegenda == 'top') {
+          return Column(
+            children: [
+              safeLegenda,
+              const SizedBox(height: 8),
+              Expanded(child: chartWidget),
+            ],
+          );
+        }
+        if (config.posicaoLegenda == 'bottom') {
+          return Column(
+            children: [
+              Expanded(child: chartWidget),
+              const SizedBox(height: 8),
+              safeLegenda,
+            ],
+          );
+        }
+        if (config.posicaoLegenda == 'left') {
+          return Row(
+            children: [
+              safeLegenda,
+              const SizedBox(width: 8),
+              Expanded(child: chartWidget),
+            ],
+          );
+        }
+        if (config.posicaoLegenda == 'right') {
+          return Row(
+            children: [
+              Expanded(child: chartWidget),
+              const SizedBox(width: 8),
+              safeLegenda,
+            ],
+          );
+        }
+        return chartWidget;
+      },
+    );
   }
 
   Widget _buildResizableDraggableChart(ChartConfig config) {
@@ -3540,6 +3677,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
     final shadowOpacity = ((config.configExtra['shadowOpacity'] ?? 0.12) as num)
         .toDouble();
     final showHeader = showTitle || (showSubtitle && subtitleText.isNotEmpty);
+    final compactHeader = config.tamanho.width < 240;
 
     return SizedBox(
       width: config.tamanho.width,
@@ -3579,9 +3717,9 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                       // CABEÃ‡ALHO DISCRETO
                       if (showHeader)
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 10,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: compactHeader ? 6 : 16,
+                            vertical: compactHeader ? 6 : 10,
                           ),
                           decoration: BoxDecoration(
                             color: config.corFundo, // Fundo igual ao card
@@ -3594,27 +3732,9 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                           ),
                           child: Row(
                             children: [
-                              GestureDetector(
-                                onPanStart: (_) =>
-                                    _iniciarArrasteVisual(config),
-                                onPanUpdate: (details) =>
-                                    _moverVisual(config, details),
-                                onPanEnd: (_) =>
-                                    _finalizarArrasteVisual(config),
-                                onPanCancel: () =>
-                                    _finalizarArrasteVisual(config),
-                                child: const MouseRegion(
-                                  cursor: SystemMouseCursors.move,
-                                  child: Icon(
-                                    Icons.drag_indicator,
-                                    size: 16,
-                                    color: Color(0xFFCBD5E1),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: GestureDetector(
+                              if (!_modoApresentacao &&
+                                  config.tamanho.width >= 160) ...[
+                                GestureDetector(
                                   onPanStart: (_) =>
                                       _iniciarArrasteVisual(config),
                                   onPanUpdate: (details) =>
@@ -3623,6 +3743,32 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                                       _finalizarArrasteVisual(config),
                                   onPanCancel: () =>
                                       _finalizarArrasteVisual(config),
+                                  child: const MouseRegion(
+                                    cursor: SystemMouseCursors.move,
+                                    child: Icon(
+                                      Icons.drag_indicator,
+                                      size: 16,
+                                      color: Color(0xFFCBD5E1),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                              ],
+                              Expanded(
+                                child: GestureDetector(
+                                  onPanStart: _modoApresentacao
+                                      ? null
+                                      : (_) => _iniciarArrasteVisual(config),
+                                  onPanUpdate: _modoApresentacao
+                                      ? null
+                                      : (details) =>
+                                            _moverVisual(config, details),
+                                  onPanEnd: _modoApresentacao
+                                      ? null
+                                      : (_) => _finalizarArrasteVisual(config),
+                                  onPanCancel: _modoApresentacao
+                                      ? null
+                                      : () => _finalizarArrasteVisual(config),
                                   child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.stretch,
@@ -3676,6 +3822,10 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                                 PopupMenuButton<String>(
                                   tooltip: 'Opcoes do visual',
                                   padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 32,
+                                    minHeight: 32,
+                                  ),
                                   icon: const Icon(
                                     Icons.more_horiz_rounded,
                                     size: 19,
@@ -3689,6 +3839,8 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                                       _copiarCsvDoVisual(config);
                                     } else if (action == 'edit') {
                                       _abrirConfiguracoesBottomSheet(config);
+                                    } else if (action == 'delete') {
+                                      unawaited(_excluirVisual(config));
                                     }
                                   },
                                   itemBuilder: (context) => const [
@@ -3724,6 +3876,23 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                                         dense: true,
                                         leading: Icon(Icons.tune_rounded),
                                         title: Text('Formatar visual'),
+                                      ),
+                                    ),
+                                    PopupMenuDivider(),
+                                    PopupMenuItem(
+                                      value: 'delete',
+                                      child: ListTile(
+                                        dense: true,
+                                        leading: Icon(
+                                          Icons.delete_outline_rounded,
+                                          color: Colors.redAccent,
+                                        ),
+                                        title: Text(
+                                          'Excluir visual',
+                                          style: TextStyle(
+                                            color: Colors.redAccent,
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ],
