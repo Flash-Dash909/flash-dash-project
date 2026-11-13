@@ -83,10 +83,36 @@ def test_dados_pessoais_sao_pseudonimizados_preservando_repeticoes():
     assert resultado["status"] == "success"
     assert set(resultado["summary"]["colunas_anonimizadas"]) == {"Email", "CPF"}
     linhas = resultado["dados_limpos"]
-    assert linhas[0]["Email"] == linhas[1]["Email"] == "EMAIL_0001"
+    assert (
+        linhas[0]["Email"]
+        == linhas[1]["Email"]
+        == "contato_0001@dados-protegidos.invalid"
+    )
     assert linhas[0]["CPF"] == linhas[1]["CPF"] == "CPF_0001"
-    assert linhas[2]["Email"] == "EMAIL_0002"
+    assert linhas[2]["Email"] == "contato_0002@dados-protegidos.invalid"
     assert "ana@empresa.com" not in str(linhas)
+
+
+def test_booleanos_numeros_por_extenso_e_email_sao_padronizados():
+    conteudo = (
+        "ativo;produto;estoque_atual;fornecedor_email\n"
+        "True;Mouse;35;contato1@fornecedor.com\n"
+        "Ativo;Teclado;dez;contato2@fornecedor.com\n"
+        "1.0;Monitor;18;contato3@fornecedor.com\n"
+        "Inativo;Webcam;zero;contato4@fornecedor.com\n"
+    ).encode("utf-8")
+
+    resultado = limparPlanilha(conteudo, "estoque.csv")
+
+    assert resultado["status"] == "success"
+    linhas = resultado["dados_limpos"]
+    assert [linha["ativo"] for linha in linhas] == [True, True, True, False]
+    assert [linha["estoque_atual"] for linha in linhas] == [35, 10, 18, 0]
+    assert all(
+        linha["fornecedor_email"].endswith("@dados-protegidos.invalid")
+        for linha in linhas
+    )
+    assert resultado["summary"]["colunas_booleanas"] == ["ativo"]
 
 
 def test_modelo_estrela_liga_dimensoes_a_tabela_fato():

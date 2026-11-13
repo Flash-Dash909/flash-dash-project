@@ -5,6 +5,7 @@ import re
 import unicodedata
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 
@@ -354,6 +355,154 @@ def _normalizar_valor(valor):
         return texto
 
 
+def _numero_por_extenso(valor):
+    if not isinstance(valor, str):
+        return None
+    texto = (
+        unicodedata.normalize("NFKD", valor)
+        .encode("ascii", "ignore")
+        .decode()
+        .casefold()
+        .replace("-", " ")
+    )
+    tokens = [token for token in re.findall(r"[a-z]+", texto) if token != "e"]
+    if not tokens:
+        return None
+
+    unidades = {
+        "zero": 0,
+        "um": 1,
+        "uma": 1,
+        "dois": 2,
+        "duas": 2,
+        "tres": 3,
+        "quatro": 4,
+        "cinco": 5,
+        "seis": 6,
+        "sete": 7,
+        "oito": 8,
+        "nove": 9,
+        "dez": 10,
+        "onze": 11,
+        "doze": 12,
+        "treze": 13,
+        "quatorze": 14,
+        "catorze": 14,
+        "quinze": 15,
+        "dezesseis": 16,
+        "dezasseis": 16,
+        "dezessete": 17,
+        "dezoito": 18,
+        "dezenove": 19,
+        "vinte": 20,
+        "trinta": 30,
+        "quarenta": 40,
+        "cinquenta": 50,
+        "sessenta": 60,
+        "setenta": 70,
+        "oitenta": 80,
+        "noventa": 90,
+        "cem": 100,
+        "cento": 100,
+        "duzentos": 200,
+        "duzentas": 200,
+        "trezentos": 300,
+        "trezentas": 300,
+        "quatrocentos": 400,
+        "quatrocentas": 400,
+        "quinhentos": 500,
+        "quinhentas": 500,
+        "seiscentos": 600,
+        "seiscentas": 600,
+        "setecentos": 700,
+        "setecentas": 700,
+        "oitocentos": 800,
+        "oitocentas": 800,
+        "novecentos": 900,
+        "novecentas": 900,
+    }
+    escalas = {
+        "mil": 1_000,
+        "milhao": 1_000_000,
+        "milhoes": 1_000_000,
+    }
+    if any(token not in unidades and token not in escalas and token != "menos" for token in tokens):
+        return None
+
+    negativo = tokens and tokens[0] == "menos"
+    if negativo:
+        tokens = tokens[1:]
+    atual = 0
+    total = 0
+    for token in tokens:
+        if token in escalas:
+            escala = escalas[token]
+            parcela = atual or 1
+            total += parcela * escala
+            atual = 0
+        else:
+            atual += unidades[token]
+    resultado = total + atual
+    return -resultado if negativo else resultado
+
+
+def _normalizar_booleano(valor):
+    if valor is None or pd.isna(valor):
+        return False, None
+    if isinstance(valor, (bool, np.bool_)):
+        return True, bool(valor)
+    if isinstance(valor, (int, float, np.integer, np.floating)):
+        if float(valor) in {0.0, 1.0}:
+            return True, bool(int(valor))
+        return False, None
+
+    texto = (
+        unicodedata.normalize("NFKD", _texto_limpo(valor))
+        .encode("ascii", "ignore")
+        .decode()
+        .casefold()
+    )
+    positivos = {
+        "1",
+        "sim",
+        "yes",
+        "y",
+        "verdadeiro",
+        "true",
+        "ativo",
+        "ativa",
+        "active",
+        "habilitado",
+        "habilitada",
+        "ligado",
+        "ligada",
+    }
+    negativos = {
+        "0",
+        "nao",
+        "no",
+        "n",
+        "falso",
+        "false",
+        "inativo",
+        "inativa",
+        "inactive",
+        "desabilitado",
+        "desabilitada",
+        "desligado",
+        "desligada",
+    }
+    if re.fullmatch(r"1(?:\.0+)?", texto):
+        return True, True
+    if re.fullmatch(r"0(?:\.0+)?", texto):
+        return True, False
+    if texto in positivos:
+        return True, True
+    if texto in negativos:
+        return True, False
+    return False, None
+
+
 def _remover_cabecalhos_repetidos(df):
     if df.empty:
         return df, 0
@@ -416,12 +565,49 @@ def _inferir_tipos(df):
             df[coluna] = serie
             continue
 
+        tokens_nome = set(re.split(r"[^a-z0-9]+", nome_normalizado))
+        nome_booleano = bool(
+            tokens_nome
+            & {
+                "ativo",
+                "ativa",
+                "active",
+                "status",
+                "habilitado",
+                "habilitada",
+                "flag",
+                "booleano",
+            }
+        )
+        booleanos_reconhecidos = preenchidos.map(_normalizar_booleano)
+        taxa_booleana = booleanos_reconhecidos.map(lambda item: item[0]).mean()
+        possui_booleano_textual = preenchidos.map(
+            lambda valor: isinstance(valor, str)
+            and _normalizar_booleano(valor)[0]
+            and not re.fullmatch(r"[01](?:\.0+)?", _texto_limpo(valor))
+        ).any()
+        if taxa_booleana >= 0.9 and (nome_booleano or possui_booleano_textual):
+            df[coluna] = serie.map(
+                lambda valor: (
+                    _normalizar_booleano(valor)[1]
+                    if _normalizar_booleano(valor)[0]
+                    else None
+                )
+            ).astype("boolean")
+            colunas_booleanas.append(coluna)
+            continue
+
         if preenchidos.map(lambda valor: isinstance(valor, bool)).mean() >= 0.9:
             df[coluna] = serie.astype("boolean")
             colunas_booleanas.append(coluna)
             continue
 
-        numerica = pd.to_numeric(serie, errors="coerce")
+        def converter_numero_escrito(valor):
+            convertido = _numero_por_extenso(valor)
+            return valor if convertido is None else convertido
+
+        serie_numerica = serie.map(converter_numero_escrito)
+        numerica = pd.to_numeric(serie_numerica, errors="coerce")
         if not identificador and numerica[serie.notna()].notna().mean() >= 0.85:
             df[coluna] = numerica
             continue
@@ -513,7 +699,12 @@ def _anonimizar_dados_sensiveis(df):
                 return None
             chave = _texto_limpo(valor).casefold()
             if chave not in mapa:
-                mapa[chave] = f"{marcador}_{len(mapa) + 1:04d}"
+                indice = len(mapa) + 1
+                mapa[chave] = (
+                    f"contato_{indice:04d}@dados-protegidos.invalid"
+                    if marcador == "EMAIL"
+                    else f"{marcador}_{indice:04d}"
+                )
             return mapa[chave]
 
         df[coluna] = df[coluna].map(pseudonimo)

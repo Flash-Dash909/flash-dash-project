@@ -107,4 +107,60 @@ void main() {
       },
     );
   }
+
+  for (final type in const [
+    'Grafico de Barras',
+    'Grafico de Colunas',
+    'Barras Empilhadas',
+    'Colunas 100%',
+    'Grafico de Linha',
+    'Grafico de Area',
+    'Area Empilhada',
+    'Radar',
+  ]) {
+    testWidgets('$type renderiza tres metricas', (tester) async {
+      const size = Size(420, 280);
+      await tester.binding.setSurfaceSize(size);
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final data = sampleData
+          .map(
+            (item) => <String, dynamic>{
+              ...item,
+              'seriesValues': {
+                'Quantidade': item['value2'],
+                'Lucro': ((item['value'] as num) * 0.2),
+              },
+            },
+          )
+          .toList();
+      final config = ChartConfig(
+        id: type,
+        tipo: type,
+        titulo: type,
+        dimensao: 'Categoria',
+        metrica: 'Receita',
+        dados: data,
+        posicao: Offset.zero,
+        tamanho: size,
+        configExtra: const {
+          'animationEnabled': false,
+          'metricasAdicionais': ['Quantidade', 'Lucro'],
+        },
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox.fromSize(
+              size: size,
+              child: ChartRenderer(config: config),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+    });
+  }
 }

@@ -12,7 +12,7 @@ class SelecaoGraficoScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    DashboardManager.dadosFonteAtual = data;
+    DashboardManager.registrarFonteDashboard(data);
 
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;

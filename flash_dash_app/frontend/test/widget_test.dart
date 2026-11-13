@@ -171,7 +171,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Dados do grafico'), findsOneWidget);
-    expect(find.text('km - retorno'), findsWidgets);
+    expect(find.text('Adicionar metrica'), findsOneWidget);
+    expect(find.text('km - retorno'), findsNothing);
+
+    await tester.tap(find.text('Adicionar metrica'));
+    await tester.pumpAndSettle();
+    expect(find.text('km - retorno'), findsOneWidget);
+    await tester.tap(find.text('km - retorno'));
+    await tester.pumpAndSettle();
+    expect(find.text('km - retorno'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

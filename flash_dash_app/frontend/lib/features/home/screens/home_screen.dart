@@ -205,8 +205,9 @@ class _HomeScreenState extends State<HomeScreen> {
     DashboardManager.metricasCalculadas.clear();
     DashboardManager.dashboardsSalvos.clear();
     DashboardManager.fontesSalvas.clear();
-    DashboardManager.dadosFonteAtual = null;
+    DashboardManager.limparFontesDashboard();
     DashboardManager.dashboardAtualId = null;
+    DashboardManager.resetarPaginas();
     DashboardManager.usuarioAtualId = null;
     DashboardManager.tokenAutenticacao = null;
     DashboardManager.usuarioAtualNome = null;
@@ -274,6 +275,8 @@ class _HomeScreenState extends State<HomeScreen> {
     DashboardManager.graficosAtivos.clear();
     DashboardManager.metricasCalculadas.clear();
     DashboardManager.dashboardAtualId = null;
+    DashboardManager.limparFontesDashboard();
+    DashboardManager.resetarPaginas();
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const UploadScreen()),
@@ -288,31 +291,90 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) setState(() {});
   }
 
+  Future<String?> _inferirFonteDeDashboardLegado(
+    Map<String, dynamic> dashboard,
+  ) async {
+    String normalizarCampo(dynamic valor) =>
+        valor.toString().trim().toLowerCase();
+
+    final campos = <String>{};
+    final graficos = dashboard['graficos_config'];
+    if (graficos is List) {
+      for (final raw in graficos) {
+        if (raw is! Map || raw['tipo'] == '__dashboard_meta__') continue;
+        for (final chave in const ['dimensao', 'metrica']) {
+          final valor = raw[chave]?.toString().trim();
+          if (valor != null && valor.isNotEmpty) {
+            campos.add(normalizarCampo(valor));
+          }
+        }
+        final extra = raw['config_extra'];
+        if (extra is Map) {
+          for (final chave in const [
+            'dimensaoSecundaria',
+            'metricaSecundaria',
+          ]) {
+            final valor = extra[chave]?.toString().trim();
+            if (valor != null && valor.isNotEmpty) {
+              campos.add(normalizarCampo(valor));
+            }
+          }
+          final adicionais = extra['metricasAdicionais'];
+          if (adicionais is List) {
+            campos.addAll(
+              adicionais.where((item) => item != null).map(normalizarCampo),
+            );
+          }
+        }
+      }
+    }
+    if (campos.isEmpty) return null;
+
+    final response = await http.get(
+      Uri.parse('$_baseUrl/fontes-dados'),
+      headers: DashboardManager.authHeaders,
+    );
+    if (response.statusCode != 200) return null;
+    final decoded = json.decode(utf8.decode(response.bodyBytes));
+    if (decoded is! List) return null;
+
+    String? melhorId;
+    var melhorPontuacao = 0;
+    for (final raw in decoded) {
+      if (raw is! Map || raw['id'] == null) continue;
+      final summary = raw['summary'];
+      if (summary is! Map) continue;
+      final colunas = <String>{
+        if (summary['cleaned_columns'] is List)
+          ...(summary['cleaned_columns'] as List).map(normalizarCampo),
+        if (summary['dimensoes'] is List)
+          ...(summary['dimensoes'] as List).map(normalizarCampo),
+        if (summary['metricas'] is List)
+          ...(summary['metricas'] as List).map(normalizarCampo),
+      };
+      final pontuacao = campos.where(colunas.contains).length;
+      if (pontuacao > melhorPontuacao) {
+        melhorPontuacao = pontuacao;
+        melhorId = raw['id'].toString();
+      }
+    }
+    return melhorId;
+  }
+
   Future<void> _restaurarFonteDoDashboard(
     Map<String, dynamic> dashboard,
   ) async {
-    final rawIds = dashboard['fonte_ids'];
-    if (rawIds is! List || rawIds.isEmpty) return;
-    final sourceId = rawIds.first?.toString();
-    if (sourceId == null || sourceId.isEmpty) return;
-
-    try {
-      final response = await http.get(
-        Uri.parse('$_baseUrl/fontes-dados/$sourceId'),
-        headers: DashboardManager.authHeaders,
-      );
-      if (response.statusCode != 200) return;
-      final decoded = json.decode(utf8.decode(response.bodyBytes));
-      if (decoded is! Map) return;
-      final source = Map<String, dynamic>.from(decoded);
+    Map<String, dynamic> dataDaFonte(Map<String, dynamic> source) {
       final summary = source['summary'] is Map
           ? Map<String, dynamic>.from(source['summary'])
           : <String, dynamic>{};
       final records =
           source['dados_limpos'] ?? source['dados_brutos'] ?? const [];
-      DashboardManager.dadosFonteAtual = {
+      return {
         'status': 'sucesso',
         'fonte': source,
+        'dados_brutos': records,
+        'dados_limpos': records,
         'dados_planilha': {
           'status': 'success',
           'summary': summary,
@@ -323,6 +385,70 @@ class _HomeScreenState extends State<HomeScreen> {
               source['modelo_estrela'] ?? summary['modelo_estrela'],
         },
       };
+    }
+
+    final ids = <String>[];
+    final rawIds = dashboard['fonte_ids'];
+    if (rawIds is List) {
+      ids.addAll(
+        rawIds
+            .where((item) => item != null && item.toString().trim().isNotEmpty)
+            .map((item) => item.toString()),
+      );
+    }
+
+    try {
+      Future<Map<String, dynamic>?> carregarFonte(String sourceId) async {
+        final response = await http.get(
+          Uri.parse('$_baseUrl/fontes-dados/$sourceId'),
+          headers: DashboardManager.authHeaders,
+        );
+        if (response.statusCode != 200) return null;
+        final decoded = json.decode(utf8.decode(response.bodyBytes));
+        return decoded is Map ? Map<String, dynamic>.from(decoded) : null;
+      }
+
+      if (ids.isEmpty) {
+        final inferida = await _inferirFonteDeDashboardLegado(dashboard);
+        if (inferida != null) ids.add(inferida);
+      }
+      if (ids.isEmpty) return;
+
+      final sources = <Map<String, dynamic>>[];
+      for (final sourceId in ids) {
+        final source = await carregarFonte(sourceId);
+        if (source != null) sources.add(source);
+      }
+      if (sources.isEmpty) {
+        final inferida = await _inferirFonteDeDashboardLegado(dashboard);
+        if (inferida != null && !ids.contains(inferida)) {
+          final source = await carregarFonte(inferida);
+          if (source != null) sources.add(source);
+        }
+      }
+      if (sources.isEmpty) return;
+
+      DashboardManager.limparFontesDashboard();
+      for (final source in sources) {
+        DashboardManager.registrarFonteDashboard(
+          dataDaFonte(source),
+          tornarAtiva: false,
+        );
+      }
+      Map<String, dynamic>? ativa;
+      for (final data in DashboardManager.fontesDashboard) {
+        final summary = data['dados_planilha']?['summary'];
+        if (summary is Map &&
+            (summary['fonte_tipo'] == 'combinacao' ||
+                (summary['fontes_origem'] is List &&
+                    (summary['fontes_origem'] as List).length > 1))) {
+          ativa = data;
+          break;
+        }
+      }
+      DashboardManager.registrarFonteDashboard(
+        ativa ?? DashboardManager.fontesDashboard.first,
+      );
     } catch (error) {
       debugPrint('Nao foi possivel restaurar a fonte do dashboard: $error');
     }
@@ -729,7 +855,22 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
 
-    List<dynamic> configDoBanco = dash['graficos_config'] ?? [];
+    final configuracaoCompleta = dash['graficos_config'] is List
+        ? List<dynamic>.from(dash['graficos_config'])
+        : <dynamic>[];
+    final metaDashboard = configuracaoCompleta.cast<dynamic>().firstWhere(
+      (item) => item is Map && item['tipo'] == '__dashboard_meta__',
+      orElse: () => null,
+    );
+    final configDoBanco = configuracaoCompleta
+        .where((item) => item is Map && item['tipo'] != '__dashboard_meta__')
+        .toList();
+    final configDaCapa = configDoBanco
+        .where(
+          (item) =>
+              item is Map && ((item['pagina'] as num?)?.toInt() ?? 0) == 0,
+        )
+        .toList();
 
     return Card(
       clipBehavior:
@@ -743,8 +884,28 @@ class _HomeScreenState extends State<HomeScreen> {
         onTap: () {
           DashboardManager.graficosAtivos.clear();
           DashboardManager.metricasCalculadas.clear();
-          DashboardManager.dadosFonteAtual = null;
+          DashboardManager.limparFontesDashboard();
           DashboardManager.dashboardAtualId = dash['id']?.toString();
+
+          if (metaDashboard is Map &&
+              metaDashboard['paginas_dashboard'] is List) {
+            DashboardManager.restaurarPaginas(
+              (metaDashboard['paginas_dashboard'] as List)
+                  .map((item) => item.toString())
+                  .toList(),
+              pagina: (metaDashboard['pagina_atual'] as num?)?.toInt() ?? 0,
+            );
+          } else {
+            final maiorPagina = configDoBanco.fold<int>(0, (maior, item) {
+              final pagina = item is Map && item['pagina'] is num
+                  ? (item['pagina'] as num).toInt()
+                  : 0;
+              return pagina > maior ? pagina : maior;
+            });
+            DashboardManager.restaurarPaginas(
+              List.generate(maiorPagina + 1, (index) => 'Pagina ${index + 1}'),
+            );
+          }
 
           final metricasDoBanco = dash['metricas_calculadas'];
           if (metricasDoBanco is List) {
@@ -802,6 +963,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   (item['largura'] ?? 350).toDouble(),
                   (item['altura'] ?? 280).toDouble(),
                 ),
+                pagina: (item['pagina'] as num?)?.toInt() ?? 0,
                 corFundo: item['cor_fundo'] != null
                     ? Color(int.parse(item['cor_fundo']))
                     : Colors.white,
@@ -843,7 +1005,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   0xFFF1F5F9,
                 ), // Fundo acinzentado simulando o Canvas
                 padding: EdgeInsets.zero,
-                child: configDoBanco.isEmpty
+                child: configDaCapa.isEmpty
                     ? Center(
                         child: Icon(
                           Icons.dashboard_customize_rounded,
@@ -853,8 +1015,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       )
                     : CustomPaint(
                         painter: _DashboardPreviewPainter(
-                          graficos: configDoBanco,
-                          limites: _limitesDashboard(configDoBanco),
+                          graficos: configDaCapa,
+                          limites: _limitesDashboard(configDaCapa),
                           resolverCor: _corDoBanco,
                         ),
                         child: const SizedBox.expand(),

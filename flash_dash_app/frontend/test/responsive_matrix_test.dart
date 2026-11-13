@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:frontend/features/dashboard/dashboard_manager.dart';
 import 'package:frontend/features/dashboard/screens/dashboard_canvas_screen.dart';
+import 'package:frontend/features/dashboard/screens/dashboard_data_screen.dart';
 import 'package:frontend/features/home/screens/home_screen.dart';
 import 'package:frontend/features/processamento/screens/etl_history_screen.dart';
 import 'package:frontend/features/processamento/screens/star_schema_screen.dart';
@@ -53,6 +54,7 @@ void main() {
     DashboardManager.tokenAutenticacao = null;
     DashboardManager.graficosAtivos.clear();
     DashboardManager.metricasCalculadas.clear();
+    DashboardManager.limparFontesDashboard();
     screens = [
       _ScreenCase('home', () => const HomeScreen()),
       _ScreenCase('fontes', () => const UploadScreen()),
@@ -97,6 +99,17 @@ void main() {
           summary: Map<String, dynamic>.from(processedData['summary'] as Map),
         ),
       ),
+      _ScreenCase('dados do dashboard', () {
+        final data = <String, dynamic>{
+          ...processedData,
+          'fonte': {
+            'id': 'fonte-responsiva',
+            'nome_arquivo': 'vendas_tratadas.xlsx',
+          },
+        };
+        DashboardManager.registrarFonteDashboard(data);
+        return const DashboardDataScreen();
+      }),
       _ScreenCase('canvas do dashboard', () {
         DashboardManager.graficosAtivos = [
           ChartConfig(

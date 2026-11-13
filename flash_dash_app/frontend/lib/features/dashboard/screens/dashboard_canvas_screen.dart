@@ -11,11 +11,13 @@ import 'package:pdf/widgets.dart' as pw;
 import '../../../core/api_config.dart';
 import '../../../core/calculated_metric.dart';
 import '../../../core/download_service.dart';
+import '../../../core/presentation_fullscreen.dart';
 import '../../../core/visual_config.dart';
 import '../../../core/widgets/app_logo.dart';
 import '../dashboard_manager.dart';
 import '../widgets/chart_renderer.dart';
 import '../widgets/power_bi_format_panel.dart';
+import 'dashboard_data_screen.dart';
 import '../../home/screens/home_screen.dart';
 import '../../resultado/screens/selecao_grafico_screen.dart';
 import '../../upload/screens/upload_screen.dart';
@@ -36,6 +38,8 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
   final Map<String, Set<String>> _selecoesVisuais = {};
   bool _isChatLoading = false;
   bool _modoApresentacao = false;
+  bool _snapAtivo = false;
+  bool _arrastandoVisual = false;
   final GlobalKey _dashboardBoundaryKey = GlobalKey();
   final TransformationController _canvasController = TransformationController();
   Size? _lastCanvasViewport;
@@ -143,7 +147,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
     var x = config.posicao.dx;
     var y = config.posicao.dy;
 
-    if (aplicarSnap) {
+    if (aplicarSnap && _snapAtivo) {
       width = _snap(width);
       height = _snap(height);
       x = _snap(x);
@@ -162,6 +166,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
     final data = DashboardManager.dadosFonteAtual;
     if (data == null) return const [];
     final ids = <String>{};
+    ids.addAll(DashboardManager.fonteIdsDashboard);
     final source = data['fonte'];
     if (source is Map && source['id'] != null) {
       ids.add(source['id'].toString());
@@ -243,9 +248,44 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
 
   @override
   void dispose() {
+    if (_modoApresentacao) {
+      unawaited(PresentationFullscreen.exit());
+    }
     _canvasController.dispose();
     _chatController.dispose();
     super.dispose();
+  }
+
+  Future<void> _definirModoApresentacao(bool ativo) async {
+    try {
+      if (ativo) {
+        await PresentationFullscreen.enter();
+      } else {
+        await PresentationFullscreen.exit();
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              ativo
+                  ? 'O navegador bloqueou a tela cheia. Tente novamente.'
+                  : 'Nao foi possivel sair da tela cheia: $error',
+            ),
+          ),
+        );
+      }
+    }
+    if (!mounted) return;
+    setState(() => _modoApresentacao = ativo);
+  }
+
+  Future<void> _abrirDadosDashboard() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const DashboardDataScreen()),
+    );
+    if (mounted) setState(() {});
   }
 
   Future<void> _salvarDashboard() async {
@@ -274,52 +314,63 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
             ElevatedButton(
               onPressed: () async {
                 if (nomeController.text.isNotEmpty) {
-                  var configJson = DashboardManager.graficosAtivos
-                      .map(
-                        (g) => {
-                          "id": g.id,
-                          "tipo": g.tipo,
-                          "titulo": g.titulo,
-                          "dimensao": g.dimensao,
-                          "metrica": g.metrica,
-                          "dados": g.dados
-                              .map(
-                                (d) => {
-                                  "label": d["label"],
-                                  if (d.containsKey("secondaryLabel"))
-                                    "secondaryLabel": d["secondaryLabel"],
-                                  "value": d["value"],
-                                  if (d.containsKey("value2"))
-                                    "value2": d["value2"],
-                                  "color": d["color"] is Color
-                                      ? (d["color"] as Color)
-                                            .toARGB32()
-                                            .toString()
-                                      : d["color"].toString(),
-                                },
-                              )
-                              .toList(),
-                          "posicao_x": g.posicao.dx,
-                          "posicao_y": g.posicao.dy,
-                          "largura": g.tamanho.width,
-                          "altura": g.tamanho.height,
-                          "cor_fundo": g.corFundo.toARGB32().toString(),
-                          "mostrar_legenda": g.mostrarLegenda,
-                          "posicao_legenda": g.posicaoLegenda,
-                          "config_extra": g.configExtra,
-                          "font_size_titulo": g.fontSizeTitulo,
-                          "alinhamento_titulo": g.alinhamentoTitulo,
-                          "cor_texto_titulo": g.corTextoTitulo
-                              .toARGB32()
-                              .toString(),
-                          "raio_borda": g.raioBorda,
-                          "mostrar_sombra": g.mostrarSombra,
-                          "mostrar_eixos": g.mostrarEixos,
-                          "mostrar_valores": g.mostrarValores,
-                          "mostrar_rotulos": g.mostrarRotulos,
-                        },
-                      )
-                      .toList();
+                  final configJson = <Map<String, dynamic>>[
+                    {
+                      "id": "__dashboard_meta__",
+                      "tipo": "__dashboard_meta__",
+                      "paginas_dashboard": DashboardManager.paginasDashboard,
+                      "pagina_atual": DashboardManager.paginaAtual,
+                    },
+                    ...DashboardManager.graficosAtivos.map(
+                      (g) => <String, dynamic>{
+                        "id": g.id,
+                        "tipo": g.tipo,
+                        "titulo": g.titulo,
+                        "dimensao": g.dimensao,
+                        "metrica": g.metrica,
+                        "pagina": g.pagina,
+                        "dados": g.dados
+                            .map(
+                              (d) => {
+                                "label": d["label"],
+                                if (d.containsKey("secondaryLabel"))
+                                  "secondaryLabel": d["secondaryLabel"],
+                                "value": d["value"],
+                                if (d.containsKey("value2"))
+                                  "value2": d["value2"],
+                                if (d["seriesValues"] is Map)
+                                  "seriesValues": Map<String, dynamic>.from(
+                                    d["seriesValues"] as Map,
+                                  ),
+                                "color": d["color"] is Color
+                                    ? (d["color"] as Color)
+                                          .toARGB32()
+                                          .toString()
+                                    : d["color"].toString(),
+                              },
+                            )
+                            .toList(),
+                        "posicao_x": g.posicao.dx,
+                        "posicao_y": g.posicao.dy,
+                        "largura": g.tamanho.width,
+                        "altura": g.tamanho.height,
+                        "cor_fundo": g.corFundo.toARGB32().toString(),
+                        "mostrar_legenda": g.mostrarLegenda,
+                        "posicao_legenda": g.posicaoLegenda,
+                        "config_extra": g.configExtra,
+                        "font_size_titulo": g.fontSizeTitulo,
+                        "alinhamento_titulo": g.alinhamentoTitulo,
+                        "cor_texto_titulo": g.corTextoTitulo
+                            .toARGB32()
+                            .toString(),
+                        "raio_borda": g.raioBorda,
+                        "mostrar_sombra": g.mostrarSombra,
+                        "mostrar_eixos": g.mostrarEixos,
+                        "mostrar_valores": g.mostrarValores,
+                        "mostrar_rotulos": g.mostrarRotulos,
+                      },
+                    ),
+                  ];
 
                   try {
                     var response = await http.post(
@@ -355,6 +406,8 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                       if (!mounted || !dialogContext.mounted) return;
                       DashboardManager.graficosAtivos.clear();
                       DashboardManager.metricasCalculadas.clear();
+                      DashboardManager.limparFontesDashboard();
+                      DashboardManager.resetarPaginas();
                       Navigator.pop(dialogContext);
                       Navigator.pushAndRemoveUntil(
                         context,
@@ -397,6 +450,8 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
     if (dashboardId == null) {
       DashboardManager.graficosAtivos.clear();
       DashboardManager.metricasCalculadas.clear();
+      DashboardManager.limparFontesDashboard();
+      DashboardManager.resetarPaginas();
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,
@@ -436,6 +491,8 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
       if (response.statusCode == 200) {
         DashboardManager.graficosAtivos.clear();
         DashboardManager.metricasCalculadas.clear();
+        DashboardManager.limparFontesDashboard();
+        DashboardManager.resetarPaginas();
         DashboardManager.dashboardAtualId = null;
         Navigator.pushAndRemoveUntil(
           context,
@@ -648,9 +705,36 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
   // Z-INDEX: TRAZER CARD PARA FRENTE
   // ==========================================
   void _trazerParaFrente(ChartConfig config) {
+    if (DashboardManager.graficosAtivos.isNotEmpty &&
+        identical(DashboardManager.graficosAtivos.last, config)) {
+      return;
+    }
     setState(() {
       DashboardManager.graficosAtivos.remove(config);
       DashboardManager.graficosAtivos.add(config);
+    });
+  }
+
+  void _iniciarArrasteVisual(ChartConfig config) {
+    _trazerParaFrente(config);
+    if (!_arrastandoVisual) setState(() => _arrastandoVisual = true);
+  }
+
+  void _moverVisual(ChartConfig config, DragUpdateDetails details) {
+    final delta = _deltaNoCanvas(details);
+    setState(() => config.posicao += delta);
+  }
+
+  Offset _deltaNoCanvas(DragUpdateDetails details) {
+    final escala = _canvasController.value.getMaxScaleOnAxis();
+    final fator = escala <= 0 ? 1.0 : escala;
+    return details.delta / fator;
+  }
+
+  void _finalizarArrasteVisual(ChartConfig config) {
+    setState(() {
+      _arrastandoVisual = false;
+      _limitarGeometriaDoVisual(config, aplicarSnap: true);
     });
   }
 
@@ -752,6 +836,252 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
     });
   }
 
+  void _mudarPagina(int pagina) {
+    final limite = DashboardManager.paginasDashboard.length - 1;
+    final destino = pagina.clamp(0, limite).toInt();
+    if (destino == DashboardManager.paginaAtual) return;
+    setState(() {
+      DashboardManager.paginaAtual = destino;
+      _selecoesVisuais.clear();
+    });
+  }
+
+  void _adicionarPagina() {
+    setState(() {
+      DashboardManager.paginasDashboard.add(
+        'Pagina ${DashboardManager.paginasDashboard.length + 1}',
+      );
+      DashboardManager.paginaAtual =
+          DashboardManager.paginasDashboard.length - 1;
+      _selecoesVisuais.clear();
+    });
+  }
+
+  Future<void> _renomearPaginaAtual() async {
+    final controller = TextEditingController(
+      text: DashboardManager.nomePaginaAtual,
+    );
+    final nome = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Renomear pagina'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 40,
+          decoration: const InputDecoration(labelText: 'Nome da pagina'),
+          onSubmitted: (value) => Navigator.pop(dialogContext, value.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(dialogContext, controller.text.trim()),
+            child: const Text('Salvar'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (!mounted || nome == null || nome.isEmpty) return;
+    setState(() {
+      DashboardManager.paginasDashboard[DashboardManager.paginaAtual] = nome;
+    });
+  }
+
+  Future<void> _excluirPaginaAtual() async {
+    if (DashboardManager.paginasDashboard.length == 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('O dashboard precisa ter uma pagina.')),
+      );
+      return;
+    }
+    final pagina = DashboardManager.paginaAtual;
+    final quantidade = DashboardManager.graficosAtivos
+        .where((grafico) => grafico.pagina == pagina)
+        .length;
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Excluir pagina'),
+        content: Text(
+          quantidade == 0
+              ? 'Deseja excluir esta pagina?'
+              : 'Esta pagina possui $quantidade visual(is). Deseja exclui-la por completo?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Excluir'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmar != true) return;
+    setState(() {
+      final removidos = DashboardManager.graficosAtivos
+          .where((grafico) => grafico.pagina == pagina)
+          .map((grafico) => grafico.id)
+          .toSet();
+      DashboardManager.graficosAtivos.removeWhere(
+        (grafico) => grafico.pagina == pagina,
+      );
+      for (final grafico in DashboardManager.graficosAtivos) {
+        if (grafico.pagina > pagina) grafico.pagina -= 1;
+      }
+      for (final id in removidos) {
+        _selecoesVisuais.remove(id);
+      }
+      DashboardManager.paginasDashboard.removeAt(pagina);
+      DashboardManager.paginaAtual = pagina
+          .clamp(0, DashboardManager.paginasDashboard.length - 1)
+          .toInt();
+    });
+  }
+
+  Widget _buildNavegacaoPaginas() {
+    final paginas = DashboardManager.paginasDashboard;
+    final atual = DashboardManager.paginaAtual;
+    final theme = Theme.of(context);
+    final compacto = MediaQuery.sizeOf(context).width < 600;
+    final foreground = _modoApresentacao
+        ? Colors.white
+        : theme.colorScheme.onSurface;
+    final background = _modoApresentacao
+        ? Colors.black.withValues(alpha: 0.72)
+        : theme.colorScheme.surface.withValues(alpha: 0.94);
+
+    return SafeArea(
+      minimum: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: background,
+        elevation: 6,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                tooltip: 'Pagina anterior',
+                onPressed: atual > 0 ? () => _mudarPagina(atual - 1) : null,
+                color: foreground,
+                icon: const Icon(Icons.chevron_left_rounded),
+              ),
+              PopupMenuButton<int>(
+                tooltip: 'Ir para pagina',
+                onSelected: _mudarPagina,
+                itemBuilder: (context) => [
+                  for (var index = 0; index < paginas.length; index++)
+                    PopupMenuItem(
+                      value: index,
+                      child: Row(
+                        children: [
+                          if (index == atual)
+                            const Icon(Icons.check_rounded, size: 18)
+                          else
+                            const SizedBox(width: 18),
+                          const SizedBox(width: 8),
+                          Flexible(child: Text(paginas[index])),
+                        ],
+                      ),
+                    ),
+                ],
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: compacto
+                        ? math.max(80, MediaQuery.sizeOf(context).width - 200)
+                        : 220,
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Text(
+                      '${paginas[atual]}  ${atual + 1}/${paginas.length}',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: foreground,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Proxima pagina',
+                onPressed: atual < paginas.length - 1
+                    ? () => _mudarPagina(atual + 1)
+                    : null,
+                color: foreground,
+                icon: const Icon(Icons.chevron_right_rounded),
+              ),
+              if (!_modoApresentacao) ...[
+                if (!compacto) ...[
+                  const SizedBox(width: 2),
+                  Container(
+                    width: 1,
+                    height: 24,
+                    color: theme.colorScheme.outlineVariant,
+                  ),
+                  IconButton(
+                    tooltip: 'Adicionar pagina',
+                    onPressed: _adicionarPagina,
+                    icon: const Icon(Icons.add_rounded),
+                  ),
+                ],
+                PopupMenuButton<String>(
+                  tooltip: 'Opcoes da pagina',
+                  onSelected: (value) {
+                    if (value == 'adicionar') _adicionarPagina();
+                    if (value == 'renomear') _renomearPaginaAtual();
+                    if (value == 'excluir') _excluirPaginaAtual();
+                  },
+                  itemBuilder: (context) => [
+                    if (compacto)
+                      const PopupMenuItem(
+                        value: 'adicionar',
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(Icons.add_rounded),
+                          title: Text('Adicionar pagina'),
+                        ),
+                      ),
+                    const PopupMenuItem(
+                      value: 'renomear',
+                      child: ListTile(
+                        dense: true,
+                        leading: Icon(Icons.edit_outlined),
+                        title: Text('Renomear pagina'),
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'excluir',
+                      child: ListTile(
+                        dense: true,
+                        leading: Icon(
+                          Icons.delete_outline_rounded,
+                          color: Colors.redAccent,
+                        ),
+                        title: Text('Excluir pagina'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -777,6 +1107,11 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                     child: AppLogo(size: 30, opacity: 0.72),
                   ),
                 IconButton(
+                  icon: const Icon(Icons.dataset_linked_outlined),
+                  onPressed: _abrirDadosDashboard,
+                  tooltip: 'Dados e fontes do dashboard',
+                ),
+                IconButton(
                   icon: const Icon(
                     Icons.save_rounded,
                     color: Color(0xFF2563EB),
@@ -787,8 +1122,18 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                 if (isDesktop) ...[
                   IconButton(
                     icon: const Icon(Icons.slideshow_rounded),
-                    onPressed: () => setState(() => _modoApresentacao = true),
+                    onPressed: () => _definirModoApresentacao(true),
                     tooltip: "Modo apresentacao",
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      Icons.grid_4x4_rounded,
+                      color: _snapAtivo ? const Color(0xFF2563EB) : null,
+                    ),
+                    onPressed: () => setState(() => _snapAtivo = !_snapAtivo),
+                    tooltip: _snapAtivo
+                        ? "Desativar encaixe na grade"
+                        : "Ativar encaixe na grade",
                   ),
                   IconButton(
                     icon: const Icon(Icons.auto_awesome, color: Colors.amber),
@@ -800,7 +1145,10 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                   tooltip: "Mais opcoes",
                   onSelected: (value) {
                     if (value == 'apresentar') {
-                      setState(() => _modoApresentacao = true);
+                      _definirModoApresentacao(true);
+                    }
+                    if (value == 'snap') {
+                      setState(() => _snapAtivo = !_snapAtivo);
                     }
                     if (value == 'ia') _abrirChatIA();
                     if (value == 'excluir') _excluirDashboardAtual();
@@ -840,6 +1188,11 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                       value: 'atualizar',
                       child: Text('Atualizar layout'),
                     ),
+                    CheckedPopupMenuItem(
+                      value: 'snap',
+                      checked: _snapAtivo,
+                      child: const Text('Encaixe na grade'),
+                    ),
                     const PopupMenuItem(
                       value: 'png',
                       child: Text('Exportar PNG'),
@@ -868,13 +1221,22 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
       body: Stack(
         children: [
           _buildCanvas(),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: _buildNavegacaoPaginas(),
+            ),
+          ),
           if (_modoApresentacao)
             Positioned(
               top: 12,
               right: 12,
               child: SafeArea(
                 child: FilledButton.tonalIcon(
-                  onPressed: () => setState(() => _modoApresentacao = false),
+                  onPressed: () => _definirModoApresentacao(false),
                   icon: const Icon(Icons.close_fullscreen_rounded),
                   label: const Text('Sair'),
                 ),
@@ -952,6 +1314,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
               : Theme.of(context).scaffoldBackgroundColor,
           child: InteractiveViewer(
             transformationController: _canvasController,
+            panEnabled: !_arrastandoVisual,
             boundaryMargin: const EdgeInsets.all(240),
             minScale: 0.2,
             maxScale: 3.0,
@@ -983,13 +1346,20 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                     child: ClipRect(
                       child: Stack(
                         clipBehavior: Clip.hardEdge,
-                        children: DashboardManager.graficosAtivos.map((config) {
-                          return Positioned(
-                            left: config.posicao.dx,
-                            top: config.posicao.dy,
-                            child: _buildResizableDraggableChart(config),
-                          );
-                        }).toList(),
+                        children: DashboardManager.graficosAtivos
+                            .where(
+                              (config) =>
+                                  config.pagina == DashboardManager.paginaAtual,
+                            )
+                            .map((config) {
+                              return Positioned(
+                                key: ValueKey(config.id),
+                                left: config.posicao.dx,
+                                top: config.posicao.dy,
+                                child: _buildResizableDraggableChart(config),
+                              );
+                            })
+                            .toList(),
                       ),
                     ),
                   ),
@@ -2662,15 +3032,54 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
     return fallback;
   }
 
-  List<dynamic> get _dadosBrutosAtuais =>
-      DashboardManager.dadosFonteAtual?['dados_brutos'] ??
-      DashboardManager.dadosFonteAtual?['dados_planilha']?['dados_brutos'] ??
-      [];
+  List<dynamic> _dadosBrutosDoGrafico(ChartConfig config) {
+    final fonteId = config.configExtra['fonteId']?.toString();
+    final data =
+        DashboardManager.fonteDashboardPorId(fonteId) ??
+        DashboardManager.dadosFonteAtual;
+    return data?['dados_limpos'] ??
+        data?['dados_brutos'] ??
+        data?['dados_planilha']?['dados_limpos'] ??
+        data?['dados_planilha']?['dados_brutos'] ??
+        const [];
+  }
+
+  String _chaveFiltro(dynamic valor) =>
+      valor?.toString().trim().toLowerCase() ?? '';
+
+  List<Map<String, dynamic>> _filtrarAgregadosSemFonte(ChartConfig config) {
+    var dados = List<Map<String, dynamic>>.from(config.dados);
+    final filtroDireto = _filtrosSegmentacao[config.dimensao];
+    if (filtroDireto != null && filtroDireto.isNotEmpty) {
+      final chaves = filtroDireto.map(_chaveFiltro).toSet();
+      dados = dados
+          .where((item) => chaves.contains(_chaveFiltro(item['label'])))
+          .toList();
+    }
+    for (final selection in _selecoesVisuais.entries) {
+      if (selection.key == config.id || selection.value.isEmpty) continue;
+      ChartConfig? source;
+      for (final chart in DashboardManager.graficosAtivos) {
+        if (chart.id == selection.key) {
+          source = chart;
+          break;
+        }
+      }
+      if (source == null || source.dimensao != config.dimensao) continue;
+      final chaves = selection.value.map(_chaveFiltro).toSet();
+      dados = dados
+          .where((item) => chaves.contains(_chaveFiltro(item['label'])))
+          .toList();
+    }
+    return dados;
+  }
 
   List<Map<String, dynamic>> _calcularDadosFiltrados(ChartConfig config) {
-    final dadosBrutos = _dadosBrutosAtuais;
-    if (dadosBrutos.isEmpty ||
-        (_filtrosSegmentacao.isEmpty && _selecoesVisuais.isEmpty)) {
+    final dadosBrutos = _dadosBrutosDoGrafico(config);
+    if (dadosBrutos.isEmpty) {
+      return _filtrarAgregadosSemFonte(config);
+    }
+    if (_filtrosSegmentacao.isEmpty && _selecoesVisuais.isEmpty) {
       return config.dados;
     }
 
@@ -2678,8 +3087,9 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
       if (linha is! Map) return false;
       for (final filtro in _filtrosSegmentacao.entries) {
         if (filtro.value.isEmpty) continue;
-        final valor = linha[filtro.key]?.toString() ?? '';
-        if (!filtro.value.contains(valor)) return false;
+        if (!linha.containsKey(filtro.key)) continue;
+        final valor = _chaveFiltro(linha[filtro.key]);
+        if (!filtro.value.map(_chaveFiltro).contains(valor)) return false;
       }
       for (final selection in _selecoesVisuais.entries) {
         if (selection.key == config.id || selection.value.isEmpty) continue;
@@ -2691,14 +3101,14 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
           }
         }
         if (source == null) continue;
-        final value = linha[source.dimensao]?.toString() ?? '';
-        if (!selection.value.contains(value)) return false;
+        if (!linha.containsKey(source.dimensao)) continue;
+        final value = _chaveFiltro(linha[source.dimensao]);
+        if (!selection.value.map(_chaveFiltro).contains(value)) return false;
       }
       return true;
     });
 
     final agrupamento = <String, List<double>>{};
-    final agrupamentoSecundario = <String, List<double>>{};
     final labelsPrimarios = <String, String>{};
     final labelsSecundarios = <String, String>{};
     final metricasCalculadas = <String, CalculatedMetric>{
@@ -2711,8 +3121,18 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
         if (metric != null) metricasCalculadas[metric.name] = metric;
       }
     }
-    final metricaSecundaria = config.configExtra['metricaSecundaria']
-        ?.toString();
+    final metricasAdicionais = <String>[
+      if (config.configExtra['metricasAdicionais'] is List)
+        ...(config.configExtra['metricasAdicionais'] as List)
+            .map((item) => item.toString())
+            .where((item) => item.isNotEmpty && item != config.metrica)
+      else if ((config.configExtra['metricaSecundaria']?.toString() ?? '')
+          .isNotEmpty)
+        config.configExtra['metricaSecundaria'].toString(),
+    ];
+    final agrupamentosAdicionais = <String, Map<String, List<double>>>{
+      for (final nome in metricasAdicionais) nome: <String, List<double>>{},
+    };
     final dimensaoSecundaria = config.configExtra['dimensaoSecundaria']
         ?.toString();
     for (final linha in linhasFiltradas) {
@@ -2737,13 +3157,15 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
         metricasCalculadas,
       );
       agrupamento.putIfAbsent(chave, () => []).add(valor);
-      if (metricaSecundaria != null && metricaSecundaria.isNotEmpty) {
-        final valor2 = resolveMetricValue(
+      for (final nome in metricasAdicionais) {
+        final valorAdicional = resolveMetricValue(
           linha,
-          metricaSecundaria,
+          nome,
           metricasCalculadas,
         );
-        agrupamentoSecundario.putIfAbsent(chave, () => []).add(valor2);
+        agrupamentosAdicionais[nome]!
+            .putIfAbsent(chave, () => [])
+            .add(valorAdicional);
       }
     }
 
@@ -2764,35 +3186,35 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
         ((config.configExtra['limiteItens'] ?? config.dados.length) as num)
             .round();
 
-    final dados = agrupamento.entries.map((entry) {
-      final valores = entry.value;
+    double agregar(List<double> valores) {
+      if (valores.isEmpty) return 0;
       final soma = valores.fold<double>(0, (total, valor) => total + valor);
-      final valor = switch (agregacao) {
+      return switch (agregacao) {
         'Media' => soma / valores.length,
         'Contagem' => valores.length.toDouble(),
         'Maximo' => valores.reduce((a, b) => a > b ? a : b),
         'Minimo' => valores.reduce((a, b) => a < b ? a : b),
         _ => soma,
       };
-      final valores2 = agrupamentoSecundario[entry.key] ?? const <double>[];
-      final soma2 = valores2.fold<double>(0, (total, valor) => total + valor);
-      final valor2 = valores2.isEmpty
-          ? 0.0
-          : switch (agregacao) {
-              'Media' => soma2 / valores2.length,
-              'Contagem' => valores2.length.toDouble(),
-              'Maximo' => valores2.reduce((a, b) => a > b ? a : b),
-              'Minimo' => valores2.reduce((a, b) => a < b ? a : b),
-              _ => soma2,
-            };
+    }
+
+    final dados = agrupamento.entries.map((entry) {
+      final valor = agregar(entry.value);
+      final seriesValues = <String, double>{
+        for (final nome in metricasAdicionais)
+          nome: agregar(
+            agrupamentosAdicionais[nome]?[entry.key] ?? const <double>[],
+          ),
+      };
       final index = agrupamento.keys.toList().indexOf(entry.key);
       return {
         'label': labelsPrimarios[entry.key] ?? entry.key,
         if ((labelsSecundarios[entry.key] ?? '').isNotEmpty)
           'secondaryLabel': labelsSecundarios[entry.key],
         'value': valor,
-        if (metricaSecundaria != null && metricaSecundaria.isNotEmpty)
-          'value2': valor2,
+        if (metricasAdicionais.isNotEmpty)
+          'value2': seriesValues[metricasAdicionais.first] ?? 0.0,
+        if (metricasAdicionais.isNotEmpty) 'seriesValues': seriesValues,
         'color': paleta[index % paleta.length],
       };
     }).toList();
@@ -2837,6 +3259,7 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
       dados: dados,
       posicao: config.posicao,
       tamanho: config.tamanho,
+      pagina: config.pagina,
       corFundo: config.corFundo,
       fontSizeTitulo: config.fontSizeTitulo,
       alinhamentoTitulo: config.alinhamentoTitulo,
@@ -2899,8 +3322,21 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
       return chartWidget;
     }
 
+    final metricasAdicionais = <String>[
+      if (config.configExtra['metricasAdicionais'] is List)
+        ...(config.configExtra['metricasAdicionais'] as List)
+            .map((item) => item.toString())
+            .where((item) => item.isNotEmpty && item != config.metrica)
+      else if ((config.configExtra['metricaSecundaria']?.toString() ?? '')
+          .isNotEmpty)
+        config.configExtra['metricaSecundaria'].toString(),
+    ];
+    if (metricasAdicionais.isEmpty &&
+        visualConfig.dados.any((item) => item.containsKey('value2'))) {
+      metricasAdicionais.add('Segunda metrica');
+    }
     final usaSeriesDeMetricas =
-        visualConfig.dados.any((item) => item.containsKey('value2')) &&
+        metricasAdicionais.isNotEmpty &&
         (tipo.contains('barra') ||
             tipo.contains('coluna') ||
             tipo.contains('linha') ||
@@ -2908,27 +3344,40 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
             tipo.contains('combo') ||
             tipo.contains('radar') ||
             tipo.contains('ribbon'));
+    final coresSeries = <dynamic>[
+      config.configExtra['corMetricaPrincipal'],
+      config.configExtra['corMetricaSecundaria'],
+      const Color(0xFF10B981),
+      const Color(0xFFEF4444),
+      const Color(0xFF8B5CF6),
+      const Color(0xFF14B8A6),
+      const Color(0xFFEC4899),
+      const Color(0xFF64748B),
+    ];
+    final nomesSeries = <String>[config.metrica, ...metricasAdicionais];
     final itensLegenda = usaSeriesDeMetricas
-        ? <Map<String, dynamic>>[
-            {
-              'label': config.metrica,
-              'color': config.configExtra['corMetricaPrincipal'],
-              'value': visualConfig.dados.fold<double>(
-                0,
-                (sum, item) => sum + ((item['value'] ?? 0) as num).toDouble(),
-              ),
-            },
-            {
-              'label':
-                  config.configExtra['metricaSecundaria']?.toString() ??
-                  'Segunda metrica',
-              'color': config.configExtra['corMetricaSecundaria'],
-              'value': visualConfig.dados.fold<double>(
-                0,
-                (sum, item) => sum + ((item['value2'] ?? 0) as num).toDouble(),
-              ),
-            },
-          ]
+        ? List<Map<String, dynamic>>.generate(nomesSeries.length, (index) {
+            final nome = nomesSeries[index];
+            final metricColors = config.configExtra['metricColors'];
+            return {
+              'label': nome,
+              'color': metricColors is Map && metricColors[nome] != null
+                  ? metricColors[nome]
+                  : coresSeries[index % coresSeries.length],
+              'value': visualConfig.dados.fold<double>(0, (sum, item) {
+                if (index == 0) {
+                  return sum + ((item['value'] ?? 0) as num).toDouble();
+                }
+                final seriesValues = item['seriesValues'];
+                final value = seriesValues is Map
+                    ? seriesValues[nome]
+                    : index == 1
+                    ? item['value2']
+                    : null;
+                return sum + (value is num ? value.toDouble() : 0.0);
+              }),
+            };
+          })
         : visualConfig.dados;
     final showLegendValues =
         config.configExtra['legendShowValues'] as bool? ?? false;
@@ -3063,7 +3512,6 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
     if (config.alinhamentoTitulo == 'center') alignTitulo = TextAlign.center;
     if (config.alinhamentoTitulo == 'right') alignTitulo = TextAlign.right;
 
-    // 1. APAGUE a variÃ¡vel "Offset posicaoToque = Offset.zero;" que ficava aqui
     const double espessuraBorda = 12.0;
     final minWidth = ((config.configExtra['minWidth'] ?? 200) as num)
         .toDouble();
@@ -3102,13 +3550,6 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
           children: [
             Positioned.fill(
               child: GestureDetector(
-                // 2. Mude o onTapDown apenas para trazer para frente
-                onTapDown: _modoApresentacao
-                    ? null
-                    : (_) {
-                        _trazerParaFrente(config);
-                      },
-                // 3. Use o onLongPressStart (ele captura os detalhes da posiÃ§Ã£o do clique longo)
                 onLongPressStart: _modoApresentacao
                     ? null
                     : (details) {
@@ -3154,19 +3595,14 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                           child: Row(
                             children: [
                               GestureDetector(
-                                onPanStart: (_) => _trazerParaFrente(
-                                  config,
-                                ), // <--- TrÃ¡s para frente ao comeÃ§ar arrastar
-                                onPanUpdate: (details) => setState(
-                                  () => config.posicao += details.delta,
-                                ),
-                                onPanEnd: (_) => setState(
-                                  () => _limitarGeometriaDoVisual(
-                                    config,
-                                    aplicarSnap: true,
-                                  ),
-                                ),
-                                // Ãcone de arraste super discreto e com cor suave
+                                onPanStart: (_) =>
+                                    _iniciarArrasteVisual(config),
+                                onPanUpdate: (details) =>
+                                    _moverVisual(config, details),
+                                onPanEnd: (_) =>
+                                    _finalizarArrasteVisual(config),
+                                onPanCancel: () =>
+                                    _finalizarArrasteVisual(config),
                                 child: const MouseRegion(
                                   cursor: SystemMouseCursors.move,
                                   child: Icon(
@@ -3179,16 +3615,14 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                               const SizedBox(width: 8),
                               Expanded(
                                 child: GestureDetector(
-                                  onPanStart: (_) => _trazerParaFrente(config),
-                                  onPanUpdate: (details) => setState(
-                                    () => config.posicao += details.delta,
-                                  ),
-                                  onPanEnd: (_) => setState(
-                                    () => _limitarGeometriaDoVisual(
-                                      config,
-                                      aplicarSnap: true,
-                                    ),
-                                  ),
+                                  onPanStart: (_) =>
+                                      _iniciarArrasteVisual(config),
+                                  onPanUpdate: (details) =>
+                                      _moverVisual(config, details),
+                                  onPanEnd: (_) =>
+                                      _finalizarArrasteVisual(config),
+                                  onPanCancel: () =>
+                                      _finalizarArrasteVisual(config),
                                   child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.stretch,
@@ -3318,10 +3752,10 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                 child: MouseRegion(
                   cursor: SystemMouseCursors.resizeLeftRight,
                   child: GestureDetector(
-                    onPanStart: (_) => _trazerParaFrente(config),
+                    onPanStart: (_) => _iniciarArrasteVisual(config),
                     onPanUpdate: (details) => setState(() {
-                      double novaLargura =
-                          config.tamanho.width + details.delta.dx;
+                      final delta = _deltaNoCanvas(details);
+                      double novaLargura = config.tamanho.width + delta.dx;
                       if (novaLargura >= minWidth) {
                         config.tamanho = Size(
                           novaLargura,
@@ -3329,10 +3763,8 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                         );
                       }
                     }),
-                    onPanEnd: (_) => setState(
-                      () =>
-                          _limitarGeometriaDoVisual(config, aplicarSnap: true),
-                    ),
+                    onPanEnd: (_) => _finalizarArrasteVisual(config),
+                    onPanCancel: () => _finalizarArrasteVisual(config),
                     child: Container(
                       width: espessuraBorda,
                       height: double.infinity,
@@ -3349,13 +3781,13 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                 child: MouseRegion(
                   cursor: SystemMouseCursors.resizeLeftRight,
                   child: GestureDetector(
-                    onPanStart: (_) => _trazerParaFrente(config),
+                    onPanStart: (_) => _iniciarArrasteVisual(config),
                     onPanUpdate: (details) => setState(() {
-                      double novaLargura =
-                          config.tamanho.width - details.delta.dx;
+                      final delta = _deltaNoCanvas(details);
+                      double novaLargura = config.tamanho.width - delta.dx;
                       if (novaLargura >= minWidth) {
                         config.posicao = Offset(
-                          config.posicao.dx + details.delta.dx,
+                          config.posicao.dx + delta.dx,
                           config.posicao.dy,
                         );
                         config.tamanho = Size(
@@ -3364,10 +3796,8 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                         );
                       }
                     }),
-                    onPanEnd: (_) => setState(
-                      () =>
-                          _limitarGeometriaDoVisual(config, aplicarSnap: true),
-                    ),
+                    onPanEnd: (_) => _finalizarArrasteVisual(config),
+                    onPanCancel: () => _finalizarArrasteVisual(config),
                     child: Container(
                       width: espessuraBorda,
                       height: double.infinity,
@@ -3384,18 +3814,16 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                 child: MouseRegion(
                   cursor: SystemMouseCursors.resizeUpDown,
                   child: GestureDetector(
-                    onPanStart: (_) => _trazerParaFrente(config),
+                    onPanStart: (_) => _iniciarArrasteVisual(config),
                     onPanUpdate: (details) => setState(() {
-                      double novaAltura =
-                          config.tamanho.height + details.delta.dy;
+                      final delta = _deltaNoCanvas(details);
+                      double novaAltura = config.tamanho.height + delta.dy;
                       if (novaAltura >= minHeight) {
                         config.tamanho = Size(config.tamanho.width, novaAltura);
                       }
                     }),
-                    onPanEnd: (_) => setState(
-                      () =>
-                          _limitarGeometriaDoVisual(config, aplicarSnap: true),
-                    ),
+                    onPanEnd: (_) => _finalizarArrasteVisual(config),
+                    onPanCancel: () => _finalizarArrasteVisual(config),
                     child: Container(
                       width: double.infinity,
                       height: espessuraBorda,
@@ -3412,22 +3840,20 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                 child: MouseRegion(
                   cursor: SystemMouseCursors.resizeUpDown,
                   child: GestureDetector(
-                    onPanStart: (_) => _trazerParaFrente(config),
+                    onPanStart: (_) => _iniciarArrasteVisual(config),
                     onPanUpdate: (details) => setState(() {
-                      double novaAltura =
-                          config.tamanho.height - details.delta.dy;
+                      final delta = _deltaNoCanvas(details);
+                      double novaAltura = config.tamanho.height - delta.dy;
                       if (novaAltura >= minHeight) {
                         config.posicao = Offset(
                           config.posicao.dx,
-                          config.posicao.dy + details.delta.dy,
+                          config.posicao.dy + delta.dy,
                         );
                         config.tamanho = Size(config.tamanho.width, novaAltura);
                       }
                     }),
-                    onPanEnd: (_) => setState(
-                      () =>
-                          _limitarGeometriaDoVisual(config, aplicarSnap: true),
-                    ),
+                    onPanEnd: (_) => _finalizarArrasteVisual(config),
+                    onPanCancel: () => _finalizarArrasteVisual(config),
                     child: Container(
                       width: double.infinity,
                       height: espessuraBorda,
@@ -3444,21 +3870,18 @@ class _DashboardCanvasScreenState extends State<DashboardCanvasScreen> {
                 child: MouseRegion(
                   cursor: SystemMouseCursors.resizeUpLeftDownRight,
                   child: GestureDetector(
-                    onPanStart: (_) => _trazerParaFrente(config),
+                    onPanStart: (_) => _iniciarArrasteVisual(config),
                     onPanUpdate: (details) => setState(() {
-                      double novaLargura =
-                          config.tamanho.width + details.delta.dx;
-                      double novaAltura =
-                          config.tamanho.height + details.delta.dy;
+                      final delta = _deltaNoCanvas(details);
+                      double novaLargura = config.tamanho.width + delta.dx;
+                      double novaAltura = config.tamanho.height + delta.dy;
                       config.tamanho = Size(
                         novaLargura > minWidth ? novaLargura : minWidth,
                         novaAltura > minHeight ? novaAltura : minHeight,
                       );
                     }),
-                    onPanEnd: (_) => setState(
-                      () =>
-                          _limitarGeometriaDoVisual(config, aplicarSnap: true),
-                    ),
+                    onPanEnd: (_) => _finalizarArrasteVisual(config),
+                    onPanCancel: () => _finalizarArrasteVisual(config),
                     child: Container(
                       width: 28,
                       height: 28,

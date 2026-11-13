@@ -23,10 +23,11 @@ class MetricasScreen extends StatefulWidget {
 }
 
 class _MetricasScreenState extends State<MetricasScreen> {
+  String? _fonteSelecionadaId;
   String? _dimensaoSelecionada;
   String? _dimensaoSecundariaSelecionada;
   String? _metricaSelecionada;
-  String? _metricaSecundariaSelecionada;
+  final List<String> _metricasAdicionaisSelecionadas = [];
   final Map<String, CalculatedMetric> _metricasCalculadas = {};
   String _agregacao = 'Soma';
   int _limiteItens = 8;
@@ -116,13 +117,18 @@ class _MetricasScreenState extends State<MetricasScreen> {
   String _themePreset = 'manual';
   late Map<String, dynamic> _powerBiConfig;
 
+  Map<String, dynamic> get _dataAtiva =>
+      DashboardManager.fonteDashboardPorId(_fonteSelecionadaId) ?? widget.data;
+
   List<dynamic> get _dadosBrutos =>
-      widget.data['dados_brutos'] ??
-      widget.data['dados_planilha']?['dados_brutos'] ??
+      _dataAtiva['dados_limpos'] ??
+      _dataAtiva['dados_brutos'] ??
+      _dataAtiva['dados_planilha']?['dados_limpos'] ??
+      _dataAtiva['dados_planilha']?['dados_brutos'] ??
       [];
 
   Map<String, dynamic> get _summary => Map<String, dynamic>.from(
-    widget.data['summary'] ?? widget.data['dados_planilha']?['summary'] ?? {},
+    _dataAtiva['summary'] ?? _dataAtiva['dados_planilha']?['summary'] ?? {},
   );
 
   bool get _isPizzaOuRosca =>
@@ -143,6 +149,15 @@ class _MetricasScreenState extends State<MetricasScreen> {
       widget.tipoGrafico.contains('Dispers') ||
       widget.tipoGrafico.contains('Radar') ||
       widget.tipoGrafico.contains('Ribbon');
+
+  int? get _limiteMetricasAdicionais {
+    if (widget.tipoGrafico.contains('Combo') ||
+        widget.tipoGrafico.contains('Dispers') ||
+        widget.tipoGrafico.contains('Ribbon')) {
+      return 1;
+    }
+    return null;
+  }
 
   bool get _isGauge => widget.tipoGrafico.contains('Gauge');
   bool get _isKpi =>
@@ -194,9 +209,24 @@ class _MetricasScreenState extends State<MetricasScreen> {
   @override
   void initState() {
     super.initState();
+    DashboardManager.registrarFonteDashboard(widget.data);
+    _fonteSelecionadaId = DashboardManager.fonteIdDe(widget.data);
     _raioFuro = widget.tipoGrafico.contains('Rosca') ? 0.58 : 0.0;
     _powerBiConfig = PowerBiVisualConfig.defaultsFor(widget.tipoGrafico);
     _metricasCalculadas.addAll(DashboardManager.metricasCalculadas);
+  }
+
+  void _selecionarFonte(String? fonteId) {
+    if (fonteId == null || fonteId == _fonteSelecionadaId) return;
+    setState(() {
+      _fonteSelecionadaId = fonteId;
+      DashboardManager.ativarFonteDashboard(fonteId);
+      _dimensaoSelecionada = null;
+      _dimensaoSecundariaSelecionada = null;
+      _metricaSelecionada = null;
+      _metricasAdicionaisSelecionadas.clear();
+      _tituloEditadoManualmente = false;
+    });
   }
 
   void _sincronizarPowerBiConfig(Map<String, dynamic> value) {
@@ -261,21 +291,23 @@ class _MetricasScreenState extends State<MetricasScreen> {
 
   List<Map<String, dynamic>> _calcularDadosDinamicos(
     String dimensao,
-    String metrica, [
-    String? metricaSecundaria,
+    String metrica,
+    List<String> metricasAdicionais, [
     String? dimensaoSecundaria,
   ]) {
     final dadosBrutos = _dadosBrutos;
     if (dadosBrutos.isEmpty) {
       return List<Map<String, dynamic>>.from(
-        widget.data['chart_data'] ??
-            widget.data['dados_planilha']?['chart_data'] ??
+        _dataAtiva['chart_data'] ??
+            _dataAtiva['dados_planilha']?['chart_data'] ??
             [],
       );
     }
 
     final agrupamento = <String, List<double>>{};
-    final agrupamentoSecundario = <String, List<double>>{};
+    final agrupamentosAdicionais = <String, Map<String, List<double>>>{
+      for (final nome in metricasAdicionais) nome: <String, List<double>>{},
+    };
     final labelsPrimarios = <String, String>{};
     final labelsSecundarios = <String, String>{};
     for (final linha in dadosBrutos) {
@@ -297,11 +329,13 @@ class _MetricasScreenState extends State<MetricasScreen> {
           ? resolveMetricValue(linha, metrica, _metricasCalculadas)
           : 0.0;
       agrupamento.putIfAbsent(chave, () => []).add(valor);
-      if (metricaSecundaria != null && metricaSecundaria.isNotEmpty) {
-        final valor2 = linha is Map
-            ? resolveMetricValue(linha, metricaSecundaria, _metricasCalculadas)
+      for (final nome in metricasAdicionais) {
+        final valorAdicional = linha is Map
+            ? resolveMetricValue(linha, nome, _metricasCalculadas)
             : 0.0;
-        agrupamentoSecundario.putIfAbsent(chave, () => []).add(valor2);
+        agrupamentosAdicionais[nome]!
+            .putIfAbsent(chave, () => [])
+            .add(valorAdicional);
       }
     }
 
@@ -316,34 +350,35 @@ class _MetricasScreenState extends State<MetricasScreen> {
       const Color(0xFF64748B),
     ];
 
-    final dados = agrupamento.entries.map((entry) {
-      final valores = entry.value;
+    double agregar(List<double> valores) {
+      if (valores.isEmpty) return 0;
       final soma = valores.fold<double>(0, (total, valor) => total + valor);
-      final valor = switch (_agregacao) {
+      return switch (_agregacao) {
         'Media' => soma / valores.length,
         'Contagem' => valores.length.toDouble(),
         'Maximo' => valores.reduce((a, b) => a > b ? a : b),
         'Minimo' => valores.reduce((a, b) => a < b ? a : b),
         _ => soma,
       };
-      final valores2 = agrupamentoSecundario[entry.key] ?? const <double>[];
-      final soma2 = valores2.fold<double>(0, (total, valor) => total + valor);
-      final valor2 = valores2.isEmpty
-          ? 0.0
-          : switch (_agregacao) {
-              'Media' => soma2 / valores2.length,
-              'Contagem' => valores2.length.toDouble(),
-              'Maximo' => valores2.reduce((a, b) => a > b ? a : b),
-              'Minimo' => valores2.reduce((a, b) => a < b ? a : b),
-              _ => soma2,
-            };
+    }
+
+    final dados = agrupamento.entries.map((entry) {
+      final valor = agregar(entry.value);
+      final valoresAdicionais = <String, double>{
+        for (final nome in metricasAdicionais)
+          nome: agregar(
+            agrupamentosAdicionais[nome]?[entry.key] ?? const <double>[],
+          ),
+      };
       final index = agrupamento.keys.toList().indexOf(entry.key);
       return {
         "label": labelsPrimarios[entry.key] ?? entry.key,
         if ((labelsSecundarios[entry.key] ?? '').isNotEmpty)
           "secondaryLabel": labelsSecundarios[entry.key],
         "value": valor,
-        if (metricaSecundaria != null) "value2": valor2,
+        if (metricasAdicionais.isNotEmpty)
+          "value2": valoresAdicionais[metricasAdicionais.first] ?? 0.0,
+        if (metricasAdicionais.isNotEmpty) "seriesValues": valoresAdicionais,
         "color": paleta[index % paleta.length],
       };
     }).toList();
@@ -369,14 +404,31 @@ class _MetricasScreenState extends State<MetricasScreen> {
 
   ChartConfig _criarConfigPreview(
     String dim,
-    String met, [
-    String? met2,
+    String met,
+    List<String> metricasAdicionais, [
     String? dim2,
   ]) {
+    final nomesMetricas = <String>[met, ...metricasAdicionais];
+    const paletaAdicional = <Color>[
+      Color(0xFF10B981),
+      Color(0xFFEF4444),
+      Color(0xFF8B5CF6),
+      Color(0xFF14B8A6),
+      Color(0xFFEC4899),
+      Color(0xFF64748B),
+    ];
+    final coresMetricas = <String, String>{
+      met: _corMetricaPrincipal.toARGB32().toString(),
+      for (var indice = 0; indice < metricasAdicionais.length; indice++)
+        metricasAdicionais[indice]:
+            (indice == 0
+                    ? _corMetricaSecundaria
+                    : paletaAdicional[(indice - 1) % paletaAdicional.length])
+                .toARGB32()
+                .toString(),
+    };
     final titulo = _tituloPersonalizado.isEmpty
-        ? met2 == null
-              ? "$met por $dim"
-              : "$met e $met2 por $dim"
+        ? "${nomesMetricas.join(' e ')} por $dim"
         : _tituloPersonalizado;
     return ChartConfig(
       id: 'preview',
@@ -384,8 +436,9 @@ class _MetricasScreenState extends State<MetricasScreen> {
       titulo: titulo,
       dimensao: dim,
       metrica: met,
-      dados: _calcularDadosDinamicos(dim, met, met2, dim2),
+      dados: _calcularDadosDinamicos(dim, met, metricasAdicionais, dim2),
       posicao: const Offset(50, 50),
+      pagina: DashboardManager.paginaAtual,
       corFundo: _corFundo,
       fontSizeTitulo: _fontSizeTitulo,
       alinhamentoTitulo: _alinhamentoTitulo,
@@ -403,7 +456,11 @@ class _MetricasScreenState extends State<MetricasScreen> {
         'calculatedMetrics': _metricasCalculadas.values
             .map((metric) => metric.toJson())
             .toList(),
-        'metricaSecundaria': ?met2,
+        if (metricasAdicionais.isNotEmpty)
+          'metricaSecundaria': metricasAdicionais.first,
+        'metricasAdicionais': metricasAdicionais,
+        'metricColors': coresMetricas,
+        'fonteId': DashboardManager.fonteIdDe(_dataAtiva),
         'dimensaoSecundaria': ?dim2,
         'limiteItens': _limiteItens,
         'ordenarDesc': _ordenarDesc,
@@ -864,9 +921,9 @@ class _MetricasScreenState extends State<MetricasScreen> {
                                   _corPrincipal = c;
                                 }),
                               ),
-                              if (_usaMetricaSecundaria)
+                              if (_metricasAdicionaisSelecionadas.isNotEmpty)
                                 _cores(
-                                  "Metrica secundaria",
+                                  "Primeira metrica adicional",
                                   _corMetricaSecundaria,
                                   [
                                     const Color(0xFFF59E0B),
@@ -1788,27 +1845,35 @@ class _MetricasScreenState extends State<MetricasScreen> {
     final met =
         _metricaSelecionada ??
         (metricas.isNotEmpty ? metricas[0].toString() : "Valor");
-    final metricaSecundariaPadrao = metricas
+    final metricasAdicionaisDisponiveis = metricas
         .map((m) => m.toString())
         .where((m) => m != met)
         .cast<String>()
         .toList();
-    final met2 = _usaMetricaSecundaria && metricaSecundariaPadrao.isNotEmpty
-        ? (_metricaSecundariaSelecionada != null &&
-                  metricaSecundariaPadrao.contains(
-                    _metricaSecundariaSelecionada,
-                  )
-              ? _metricaSecundariaSelecionada
-              : metricaSecundariaPadrao.first)
-        : null;
+    final metricasSelecionadasValidas = _metricasAdicionaisSelecionadas.where(
+      (nome) => nome != met && metricasAdicionaisDisponiveis.contains(nome),
+    );
+    final limiteMetricas = _limiteMetricasAdicionais;
+    final metricasAdicionais = _usaMetricaSecundaria
+        ? (limiteMetricas == null
+              ? metricasSelecionadasValidas.toList()
+              : metricasSelecionadasValidas.take(limiteMetricas).toList())
+        : <String>[];
+    final metricasAindaDisponiveis = metricasAdicionaisDisponiveis
+        .where((nome) => !metricasAdicionais.contains(nome))
+        .toList();
 
     if (!_tituloEditadoManualmente) {
-      _tituloPersonalizado = met2 == null
-          ? "$met por $dim"
-          : "$met e $met2 por $dim";
+      _tituloPersonalizado =
+          "${<String>[met, ...metricasAdicionais].join(' e ')} por $dim";
     }
 
-    final configPreview = _criarConfigPreview(dim, met, met2, dim2);
+    final configPreview = _criarConfigPreview(
+      dim,
+      met,
+      metricasAdicionais,
+      dim2,
+    );
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
@@ -1886,7 +1951,7 @@ class _MetricasScreenState extends State<MetricasScreen> {
                   configPreview
                     ..id = DateTime.now().millisecondsSinceEpoch.toString(),
                 );
-                DashboardManager.dadosFonteAtual = widget.data;
+                DashboardManager.registrarFonteDashboard(_dataAtiva);
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -1952,6 +2017,33 @@ class _MetricasScreenState extends State<MetricasScreen> {
                     ),
                   ),
                   const SizedBox(height: 24),
+                  if (DashboardManager.fontesDashboard.length > 1) ...[
+                    DropdownButtonFormField<String>(
+                      key: ValueKey(_fonteSelecionadaId),
+                      initialValue: _fonteSelecionadaId,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Tabela ou modelo',
+                        prefixIcon: Icon(Icons.dataset_linked_outlined),
+                        helperText:
+                            'Escolha de qual fonte virao as dimensoes e metricas.',
+                      ),
+                      items: DashboardManager.fontesDashboard
+                          .map(
+                            (data) => DropdownMenuItem(
+                              value: DashboardManager.fonteIdDe(data),
+                              child: Text(
+                                DashboardManager.nomeFonteDe(data),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: _selecionarFonte,
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   DropdownButtonFormField<String>(
                     initialValue: dimensoes.contains(dim) ? dim : null,
                     isExpanded: true,
@@ -2016,8 +2108,10 @@ class _MetricasScreenState extends State<MetricasScreen> {
                           ),
                         )
                         .toList(),
-                    onChanged: (val) =>
-                        setState(() => _metricaSelecionada = val),
+                    onChanged: (val) => setState(() {
+                      _metricaSelecionada = val;
+                      _metricasAdicionaisSelecionadas.remove(val);
+                    }),
                   ),
                   const SizedBox(height: 10),
                   OutlinedButton.icon(
@@ -2046,39 +2140,95 @@ class _MetricasScreenState extends State<MetricasScreen> {
                             if (_metricaSelecionada == metric.name) {
                               _metricaSelecionada = null;
                             }
-                            if (_metricaSecundariaSelecionada == metric.name) {
-                              _metricaSecundariaSelecionada = null;
-                            }
+                            _metricasAdicionaisSelecionadas.remove(metric.name);
                           }),
                         );
                       }).toList(),
                     ),
                   ],
-                  if (_usaMetricaSecundaria &&
-                      metricaSecundariaPadrao.isNotEmpty) ...[
+                  if (_usaMetricaSecundaria) ...[
                     const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      initialValue: met2,
-                      isExpanded: true,
-                      decoration: const InputDecoration(
-                        labelText: "Segunda metrica",
-                        helperText:
-                            "Usada para empilhar, comparar ou desenhar a linha.",
-                      ),
-                      items: metricaSecundariaPadrao
-                          .map(
-                            (m) => DropdownMenuItem(
-                              value: m,
-                              child: Text(
-                                m,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                    if (metricasAdicionais.isNotEmpty)
+                      ...metricasAdicionais.map(
+                        (nome) => Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: InputDecorator(
+                            decoration: InputDecoration(
+                              labelText: 'Metrica adicional',
+                              suffixIcon: IconButton(
+                                tooltip: 'Remover metrica',
+                                onPressed: () => setState(
+                                  () => _metricasAdicionaisSelecionadas.remove(
+                                    nome,
+                                  ),
+                                ),
+                                icon: const Icon(Icons.close_rounded),
                               ),
                             ),
-                          )
-                          .toList(),
-                      onChanged: (val) =>
-                          setState(() => _metricaSecundariaSelecionada = val),
+                            child: Text(
+                              nome,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ),
+                    OutlinedButton.icon(
+                      onPressed:
+                          metricasAindaDisponiveis.isEmpty ||
+                              (limiteMetricas != null &&
+                                  metricasAdicionais.length >= limiteMetricas)
+                          ? null
+                          : () async {
+                              final selecionada =
+                                  await showModalBottomSheet<String>(
+                                    context: context,
+                                    showDragHandle: true,
+                                    builder: (sheetContext) => SafeArea(
+                                      child: ListView(
+                                        shrinkWrap: true,
+                                        children: [
+                                          const ListTile(
+                                            title: Text(
+                                              'Adicionar metrica',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                            ),
+                                            subtitle: Text(
+                                              'Escolha outra serie para o visual.',
+                                            ),
+                                          ),
+                                          ...metricasAindaDisponiveis.map(
+                                            (nome) => ListTile(
+                                              leading: const Icon(
+                                                Icons.add_chart_rounded,
+                                              ),
+                                              title: Text(nome),
+                                              onTap: () => Navigator.pop(
+                                                sheetContext,
+                                                nome,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                              if (selecionada != null && mounted) {
+                                setState(
+                                  () => _metricasAdicionaisSelecionadas.add(
+                                    selecionada,
+                                  ),
+                                );
+                              }
+                            },
+                      icon: const Icon(Icons.add_rounded),
+                      label: Text(
+                        metricasAdicionais.isEmpty
+                            ? 'Adicionar metrica'
+                            : 'Adicionar outra metrica',
+                      ),
                     ),
                   ],
                   const SizedBox(height: 16),

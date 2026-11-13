@@ -10,7 +10,9 @@ import '../../dashboard/dashboard_manager.dart';
 import '../../resultado/screens/selecao_grafico_screen.dart';
 
 class UploadScreen extends StatefulWidget {
-  const UploadScreen({super.key});
+  final bool retornarFonte;
+
+  const UploadScreen({super.key, this.retornarFonte = false});
 
   @override
   State<UploadScreen> createState() => _UploadScreenState();
@@ -238,6 +240,7 @@ class _UploadScreenState extends State<UploadScreen> {
   Future<void> _tratarResposta(http.Response response) async {
     final data = json.decode(utf8.decode(response.bodyBytes));
     if (response.statusCode == 200 && data['status'] != 'error') {
+      final dataMap = Map<String, dynamic>.from(data as Map);
       final fonte = data['fonte'];
       if (fonte is Map<String, dynamic>) {
         DashboardManager.fontesSalvas.removeWhere(
@@ -251,11 +254,18 @@ class _UploadScreenState extends State<UploadScreen> {
           'status': fonte['status']?.toString() ?? 'Concluido',
         });
       }
+      if (!widget.retornarFonte) {
+        DashboardManager.registrarFonteDashboard(dataMap);
+      }
       if (!mounted) return;
+      if (widget.retornarFonte) {
+        Navigator.pop(context, dataMap);
+        return;
+      }
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => SelecaoGraficoScreen(data: data),
+          builder: (context) => SelecaoGraficoScreen(data: dataMap),
         ),
       );
       return;

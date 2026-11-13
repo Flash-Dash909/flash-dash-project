@@ -4,6 +4,35 @@ import 'package:flutter/material.dart';
 
 import '../dashboard_manager.dart';
 
+List<String> _nomesMetricasDoVisual(ChartConfig config) {
+  final adicionais = <String>[
+    if (config.configExtra['metricasAdicionais'] is List)
+      ...(config.configExtra['metricasAdicionais'] as List)
+          .map((item) => item.toString())
+          .where((item) => item.isNotEmpty && item != config.metrica)
+    else if ((config.configExtra['metricaSecundaria']?.toString() ?? '')
+        .isNotEmpty)
+      config.configExtra['metricaSecundaria'].toString(),
+  ];
+  if (adicionais.isEmpty &&
+      config.dados.any((item) => item.containsKey('value2'))) {
+    adicionais.add('Segunda metrica');
+  }
+  return <String>{config.metrica, ...adicionais}.toList();
+}
+
+double _valorMetricaDoItem(Map<String, dynamic> item, String nome, int indice) {
+  if (indice == 0) return ((item['value'] ?? 0) as num).toDouble();
+  final seriesValues = item['seriesValues'];
+  if (seriesValues is Map && seriesValues[nome] is num) {
+    return (seriesValues[nome] as num).toDouble();
+  }
+  if (indice == 1 && item['value2'] is num) {
+    return (item['value2'] as num).toDouble();
+  }
+  return 0;
+}
+
 class ChartRenderer extends StatelessWidget {
   final ChartConfig config;
   final Set<String>? filtrosSelecionados;
@@ -85,7 +114,12 @@ class _VisualAnimation extends StatelessWidget {
     final mode = config.configExtra['animationIn']?.toString() ?? 'fade';
     final signature = Object.hashAll(
       config.dados.expand(
-        (item) => [item['label'], item['value'], item['value2']],
+        (item) => [
+          item['label'],
+          item['value'],
+          item['value2'],
+          item['seriesValues']?.toString(),
+        ],
       ),
     );
     return AnimatedSwitcher(
@@ -294,8 +328,10 @@ class _InteractiveChartState extends State<_InteractiveChart> {
         final left = (_tooltipPosition.dx + 12)
             .clamp(4.0, math.max(4.0, size.width - tooltipWidth - 4))
             .toDouble();
+        final tooltipHeight =
+            46.0 + _nomesMetricasDoVisual(widget.config).length * 18.0;
         final top = (_tooltipPosition.dy + 12)
-            .clamp(4.0, math.max(4.0, size.height - 78))
+            .clamp(4.0, math.max(4.0, size.height - tooltipHeight))
             .toDouble();
 
         return Stack(
@@ -392,11 +428,18 @@ class _ChartTooltip extends StatelessWidget {
                 '${config.metrica}: ${_formatarValorVisual(config, ((data['value'] ?? 0) as num).toDouble())}',
                 style: TextStyle(color: foreground, fontSize: 11),
               ),
-            if (showValue2 && data.containsKey('value2'))
-              Text(
-                '${config.configExtra['metricaSecundaria'] ?? 'Segunda metrica'}: ${_formatarValorVisual(config, ((data['value2'] ?? 0) as num).toDouble())}',
-                style: TextStyle(color: foreground, fontSize: 11),
-              ),
+            if (showValue2)
+              ..._nomesMetricasDoVisual(config)
+                  .skip(1)
+                  .toList()
+                  .asMap()
+                  .entries
+                  .map(
+                    (entry) => Text(
+                      '${entry.value}: ${_formatarValorVisual(config, _valorMetricaDoItem(data, entry.value, entry.key + 1))}',
+                      style: TextStyle(color: foreground, fontSize: 11),
+                    ),
+                  ),
           ],
         ),
       ),
@@ -457,6 +500,32 @@ class _ChartPainter extends CustomPainter {
           config.configExtra['stackColor'],
       fallback,
     );
+  }
+
+  List<String> get _nomesMetricas => _nomesMetricasDoVisual(config);
+
+  double _valorSerie(Map<String, dynamic> item, int indice) =>
+      _valorMetricaDoItem(item, _nomesMetricas[indice], indice);
+
+  Color _corSerie(int indice) {
+    final nome = _nomesMetricas[indice];
+    final coresConfiguradas = config.configExtra['metricColors'];
+    if (coresConfiguradas is Map && coresConfiguradas[nome] != null) {
+      return _converterCor(coresConfiguradas[nome]);
+    }
+    if (indice == 0) return _corMetricaPrincipal();
+    if (indice == 1) return _corMetricaSecundaria();
+    const paleta = <Color>[
+      Color(0xFF10B981),
+      Color(0xFFEF4444),
+      Color(0xFF8B5CF6),
+      Color(0xFF14B8A6),
+      Color(0xFFEC4899),
+      Color(0xFF64748B),
+      Color(0xFF0EA5E9),
+      Color(0xFF84CC16),
+    ];
+    return paleta[(indice - 2) % paleta.length];
   }
 
   bool get _usarCorPorMetrica =>
@@ -677,7 +746,7 @@ class _ChartPainter extends CustomPainter {
     if (tipo.contains('linha') || tipo.contains('area')) {
       if (tipo.contains('area') &&
           (tipo.contains('empilh') || tipo.contains('100%')) &&
-          dados.any((d) => d.containsKey('value2'))) {
+          _nomesMetricas.length > 1) {
         _desenharAreaEmpilhada(
           canvas,
           chartRect,
@@ -702,10 +771,9 @@ class _ChartPainter extends CustomPainter {
 
   double _maxValor(List<Map<String, dynamic>> dados) {
     final valores = <double>[
-      ...dados.map((d) => ((d['value'] ?? 0) as num).toDouble()),
-      ...dados
-          .where((d) => d.containsKey('value2'))
-          .map((d) => ((d['value2'] ?? 0) as num).toDouble()),
+      for (final item in dados)
+        for (var indice = 0; indice < _nomesMetricas.length; indice++)
+          _valorSerie(item, indice),
     ];
     if (valores.isEmpty) return 1;
     final configured = config.configExtra['yAxisMax'];
@@ -788,11 +856,14 @@ class _ChartPainter extends CustomPainter {
   }
 
   double _maxValorEmpilhado(List<Map<String, dynamic>> dados) {
-    final valores = dados.map((d) {
-      final v1 = ((d['value'] ?? 0) as num).toDouble().abs();
-      final v2 = ((d['value2'] ?? 0) as num).toDouble().abs();
-      return v1 + v2;
-    }).toList();
+    final valores = dados
+        .map(
+          (item) => List<double>.generate(
+            _nomesMetricas.length,
+            (indice) => _valorSerie(item, indice).abs(),
+          ).fold<double>(0, (total, valor) => total + valor),
+        )
+        .toList();
     if (valores.isEmpty) return 1;
     final maximo = valores.reduce(math.max);
     return maximo <= 0 ? 1 : maximo;
@@ -876,18 +947,15 @@ class _ChartPainter extends CustomPainter {
   }) {
     final tipo = config.tipo.toLowerCase();
     final empilhado = tipo.contains('empilh') || tipo.contains('100%');
-    if (empilhado && dados.any((d) => d.containsKey('value2'))) {
-      _desenharBarrasEmpilhadas(
+    if (_nomesMetricas.length > 1) {
+      _desenharBarrasMultiplas(
         canvas,
         rect,
         dados,
         horizontal: horizontal,
+        empilhado: empilhado,
         percentual: tipo.contains('100%'),
       );
-      return;
-    }
-    if (!empilhado && dados.any((d) => d.containsKey('value2'))) {
-      _desenharBarrasAgrupadas(canvas, rect, dados, horizontal: horizontal);
       return;
     }
 
@@ -1017,6 +1085,153 @@ class _ChartPainter extends CustomPainter {
     }
   }
 
+  void _desenharBarrasMultiplas(
+    Canvas canvas,
+    Rect rect,
+    List<Map<String, dynamic>> dados, {
+    required bool horizontal,
+    required bool empilhado,
+    required bool percentual,
+  }) {
+    if (dados.isEmpty || _nomesMetricas.isEmpty) return;
+    final quantidadeSeries = _nomesMetricas.length;
+    final maxValor = percentual
+        ? 100.0
+        : empilhado
+        ? _maxValorEmpilhado(dados)
+        : _maxValor(dados);
+    _desenharGrade(canvas, rect, maxValor);
+    final textPainter = TextPainter(textDirection: TextDirection.ltr);
+
+    if (horizontal) {
+      final slot = rect.height / dados.length;
+      final gap = slot * _numExtra('barGap', 0.08).clamp(0.0, 0.75);
+      final alturaGrupo = math.max(2.0, slot - gap);
+      for (var indiceItem = 0; indiceItem < dados.length; indiceItem++) {
+        final item = dados[indiceItem];
+        final valores = List<double>.generate(
+          quantidadeSeries,
+          (indice) => _valorSerie(item, indice).abs(),
+        );
+        final total = math.max(
+          0.000001,
+          valores.fold<double>(0, (soma, valor) => soma + valor),
+        );
+        var cursor = rect.left;
+        for (
+          var indiceSerie = 0;
+          indiceSerie < quantidadeSeries;
+          indiceSerie++
+        ) {
+          final valor = valores[indiceSerie];
+          final largura = empilhado
+              ? rect.width * (percentual ? valor / total : valor / maxValor)
+              : rect.width * _normalizar(valor, maxValor);
+          final altura = empilhado
+              ? alturaGrupo
+              : alturaGrupo / quantidadeSeries * 0.88;
+          final top = empilhado
+              ? rect.top + indiceItem * slot + gap / 2
+              : rect.top +
+                    indiceItem * slot +
+                    gap / 2 +
+                    indiceSerie * (alturaGrupo / quantidadeSeries);
+          final barra = Rect.fromLTWH(
+            empilhado ? cursor : rect.left,
+            top,
+            largura,
+            altura,
+          );
+          canvas.drawRRect(
+            RRect.fromRectAndRadius(
+              barra,
+              Radius.circular(_numExtra('barRadius', 3)),
+            ),
+            Paint()
+              ..color = _corDoItem(
+                _corSerie(indiceSerie),
+                indiceItem,
+              ).withValues(alpha: _numExtra('barOpacity', 1.0)),
+          );
+          if (empilhado) cursor += largura;
+        }
+      }
+      return;
+    }
+
+    final slot = rect.width / dados.length;
+    final gap = slot * _numExtra('barGap', 0.08).clamp(0.0, 0.75);
+    final larguraGrupo = math.max(2.0, slot - gap);
+    for (var indiceItem = 0; indiceItem < dados.length; indiceItem++) {
+      final item = dados[indiceItem];
+      final valores = List<double>.generate(
+        quantidadeSeries,
+        (indice) => _valorSerie(item, indice).abs(),
+      );
+      final total = math.max(
+        0.000001,
+        valores.fold<double>(0, (soma, valor) => soma + valor),
+      );
+      var cursor = rect.bottom;
+      for (var indiceSerie = 0; indiceSerie < quantidadeSeries; indiceSerie++) {
+        final valor = valores[indiceSerie];
+        final altura = empilhado
+            ? rect.height * (percentual ? valor / total : valor / maxValor)
+            : rect.height * _normalizar(valor, maxValor);
+        final largura = empilhado
+            ? larguraGrupo
+            : larguraGrupo / quantidadeSeries * 0.88;
+        final left = empilhado
+            ? rect.left + indiceItem * slot + gap / 2
+            : rect.left +
+                  indiceItem * slot +
+                  gap / 2 +
+                  indiceSerie * (larguraGrupo / quantidadeSeries);
+        final barra = Rect.fromLTWH(
+          left,
+          empilhado ? cursor - altura : rect.bottom - altura,
+          largura,
+          altura,
+        );
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            barra,
+            Radius.circular(_numExtra('barRadius', 3)),
+          ),
+          Paint()
+            ..color = _corDoItem(
+              _corSerie(indiceSerie),
+              indiceItem,
+            ).withValues(alpha: _numExtra('barOpacity', 1.0)),
+        );
+        if (empilhado) cursor -= altura;
+      }
+
+      if (config.mostrarRotulos) {
+        final label = item['label']?.toString() ?? '';
+        textPainter.text = TextSpan(
+          text: label.length > 10 ? '${label.substring(0, 10)}...' : label,
+          style: TextStyle(
+            fontSize: _numExtra('xAxisFontSize', 9),
+            color: _converterCor(
+              config.configExtra['xAxisColor'],
+              const Color(0xFF475569),
+            ),
+          ),
+        );
+        textPainter.layout(maxWidth: slot);
+        textPainter.paint(
+          canvas,
+          Offset(
+            rect.left + indiceItem * slot + (slot - textPainter.width) / 2,
+            rect.bottom + 8,
+          ),
+        );
+      }
+    }
+  }
+
+  // ignore: unused_element
   void _desenharBarrasAgrupadas(
     Canvas canvas,
     Rect rect,
@@ -1156,6 +1371,7 @@ class _ChartPainter extends CustomPainter {
     }
   }
 
+  // ignore: unused_element
   void _desenharBarrasEmpilhadas(
     Canvas canvas,
     Rect rect,
@@ -1287,7 +1503,8 @@ class _ChartPainter extends CustomPainter {
     List<Map<String, dynamic>> dados,
     bool area,
   ) {
-    final independent = _usarEscalaSecundariaIndependente(dados);
+    final independent =
+        _nomesMetricas.length == 2 && _usarEscalaSecundariaIndependente(dados);
     final primaryMax = independent
         ? _maxValorDaSerie(dados, 'value')
         : _maxValor(dados);
@@ -1300,11 +1517,13 @@ class _ChartPainter extends CustomPainter {
     }
     if (dados.length < 2) return;
 
-    List<Offset> pointsFor(String key) {
+    List<Offset> pointsFor(int indiceSerie) {
       return List.generate(dados.length, (index) {
-        final value = ((dados[index][key] ?? 0) as num).toDouble();
+        final value = _valorSerie(dados[index], indiceSerie);
         final x = rect.left + (rect.width / (dados.length - 1)) * index;
-        final maximum = key == 'value2' ? secondaryMax : primaryMax;
+        final maximum = indiceSerie == 1 && independent
+            ? secondaryMax
+            : primaryMax;
         final y = rect.bottom - _normalizar(value, maximum) * rect.height;
         return Offset(x, y);
       });
@@ -1338,14 +1557,13 @@ class _ChartPainter extends CustomPainter {
       return path;
     }
 
-    final series = <({String key, Color color})>[
-      (key: 'value', color: _corMetricaPrincipal()),
-      if (dados.any((item) => item.containsKey('value2')))
-        (key: 'value2', color: _corMetricaSecundaria()),
-    ];
+    final series = List.generate(
+      _nomesMetricas.length,
+      (indice) => (indice: indice, color: _corSerie(indice)),
+    );
 
     for (final serie in series) {
-      final points = pointsFor(serie.key);
+      final points = pointsFor(serie.indice);
       final path = pathFor(points);
       if (area) {
         final areaPath = Path.from(path)
@@ -1388,11 +1606,11 @@ class _ChartPainter extends CustomPainter {
             _corDoItem(serie.color, i),
           );
           if (config.mostrarValores) {
-            final value = ((dados[i][serie.key] ?? 0) as num).toDouble();
+            final value = _valorSerie(dados[i], serie.indice);
             _desenharTextoCentralizado(
               canvas,
               _formatarNumero(value),
-              point.translate(0, serie.key == 'value' ? -14 : 14),
+              point.translate(0, serie.indice.isEven ? -14 : 14),
               TextStyle(
                 fontSize: _numExtra('labelFontSize', 10),
                 color: _converterCor(
@@ -1485,58 +1703,68 @@ class _ChartPainter extends CustomPainter {
     List<Map<String, dynamic>> dados, {
     required bool percentual,
   }) {
-    if (dados.length < 2) return;
-    final maxValor = percentual ? 1.0 : _maxValorEmpilhado(dados);
+    if (dados.length < 2 || _nomesMetricas.isEmpty) return;
+    final maxValor = _maxValorEmpilhado(dados);
     _desenharGrade(canvas, rect, percentual ? 100 : maxValor);
-
-    List<Offset> pontosBase = [];
-    List<Offset> pontosTopo = [];
-    for (int i = 0; i < dados.length; i++) {
-      final v1 = ((dados[i]['value'] ?? 0) as num).toDouble().abs();
-      final v2 = ((dados[i]['value2'] ?? 0) as num).toDouble().abs();
-      final total = math.max(1.0, v1 + v2);
-      final base = percentual ? total : maxValor;
-      final x = rect.left + (rect.width / (dados.length - 1)) * i;
-      final yBase = rect.bottom - (v1 / base) * rect.height;
-      final yTopo = rect.bottom - ((v1 + v2) / base) * rect.height;
-      pontosBase.add(Offset(x, yBase));
-      pontosTopo.add(Offset(x, yTopo));
-    }
-
-    Path area1 = Path()
-      ..moveTo(rect.left, rect.bottom)
-      ..lineTo(pontosBase.first.dx, pontosBase.first.dy);
-    for (final ponto in pontosBase.skip(1)) {
-      area1.lineTo(ponto.dx, ponto.dy);
-    }
-    area1
-      ..lineTo(rect.right, rect.bottom)
-      ..close();
-
-    Path area2 = Path()..moveTo(pontosBase.first.dx, pontosBase.first.dy);
-    for (final ponto in pontosBase.skip(1)) {
-      area2.lineTo(ponto.dx, ponto.dy);
-    }
-    for (final ponto in pontosTopo.reversed) {
-      area2.lineTo(ponto.dx, ponto.dy);
-    }
-    area2.close();
-
-    canvas.drawPath(
-      area1,
-      Paint()..color = _corMetricaPrincipal().withValues(alpha: 0.35),
+    final acumulados = List<double>.filled(dados.length, 0);
+    final totais = List<double>.generate(
+      dados.length,
+      (indiceItem) => math.max(
+        0.000001,
+        List<double>.generate(
+          _nomesMetricas.length,
+          (indiceSerie) => _valorSerie(dados[indiceItem], indiceSerie).abs(),
+        ).fold<double>(0, (soma, valor) => soma + valor),
+      ),
     );
-    canvas.drawPath(
-      area2,
-      Paint()..color = _corMetricaSecundaria().withValues(alpha: 0.42),
-    );
-    canvas.drawPath(
-      Path()..addPolygon(pontosTopo, false),
-      Paint()
-        ..color = _corMetricaSecundaria()
-        ..strokeWidth = 2
-        ..style = PaintingStyle.stroke,
-    );
+
+    for (
+      var indiceSerie = 0;
+      indiceSerie < _nomesMetricas.length;
+      indiceSerie++
+    ) {
+      final pontosBase = <Offset>[];
+      final pontosTopo = <Offset>[];
+      for (var indiceItem = 0; indiceItem < dados.length; indiceItem++) {
+        final valor = _valorSerie(dados[indiceItem], indiceSerie).abs();
+        final divisor = percentual ? totais[indiceItem] : maxValor;
+        final x = rect.left + (rect.width / (dados.length - 1)) * indiceItem;
+        pontosBase.add(
+          Offset(
+            x,
+            rect.bottom - (acumulados[indiceItem] / divisor) * rect.height,
+          ),
+        );
+        acumulados[indiceItem] += valor;
+        pontosTopo.add(
+          Offset(
+            x,
+            rect.bottom - (acumulados[indiceItem] / divisor) * rect.height,
+          ),
+        );
+      }
+
+      final area = Path()..moveTo(pontosTopo.first.dx, pontosTopo.first.dy);
+      for (final ponto in pontosTopo.skip(1)) {
+        area.lineTo(ponto.dx, ponto.dy);
+      }
+      for (final ponto in pontosBase.reversed) {
+        area.lineTo(ponto.dx, ponto.dy);
+      }
+      area.close();
+      final cor = _corSerie(indiceSerie);
+      canvas.drawPath(
+        area,
+        Paint()..color = cor.withValues(alpha: _numExtra('areaOpacity', 0.36)),
+      );
+      canvas.drawPath(
+        Path()..addPolygon(pontosTopo, false),
+        Paint()
+          ..color = cor
+          ..strokeWidth = _numExtra('lineWidth', 2)
+          ..style = PaintingStyle.stroke,
+      );
+    }
   }
 
   void _desenharDispersao(
@@ -1682,10 +1910,10 @@ class _ChartPainter extends CustomPainter {
       canvas.drawPath(path, gridPaint);
     }
 
-    void drawSeries(String key, Color color) {
+    void drawSeries(int indiceSerie, Color color) {
       final dataPath = Path();
       for (int i = 0; i < quantidade; i++) {
-        final valor = ((dados[i][key] ?? 0) as num).toDouble();
+        final valor = _valorSerie(dados[i], indiceSerie);
         final angle = -math.pi / 2 + (2 * math.pi / quantidade) * i;
         final p =
             center +
@@ -1716,9 +1944,8 @@ class _ChartPainter extends CustomPainter {
       );
     }
 
-    drawSeries('value', _corMetricaPrincipal(const Color(0xFF14B8A6)));
-    if (dados.any((item) => item.containsKey('value2'))) {
-      drawSeries('value2', _corMetricaSecundaria());
+    for (var indice = 0; indice < _nomesMetricas.length; indice++) {
+      drawSeries(indice, _corSerie(indice));
     }
   }
 
